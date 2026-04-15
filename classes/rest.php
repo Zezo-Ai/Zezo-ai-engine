@@ -17,19 +17,7 @@ class Meow_MWAI_Rest {
   * @return string The retrieved (and optionally sanitized) message.
   */
   public function retrieve_message( &$params, $sanitize = false ): string {
-    if ( isset( $params['message'] ) ) {
-      $message = $params['message'];
-    }
-    // TODO: Remove after March 2026 - Legacy "prompt" parameter support
-    elseif ( isset( $params['prompt'] ) ) {
-      $message = $params['prompt'];
-      unset( $params['prompt'] );
-      $params['message'] = $message;
-      Meow_MWAI_Logging::deprecated( '"prompt" is deprecated, please use "message" instead.' );
-    }
-    else {
-      $message = '';
-    }
+    $message = $params['message'] ?? '';
 
     if ( $sanitize ) {
       $message = sanitize_text_field( $message );
@@ -867,7 +855,7 @@ class Meow_MWAI_Rest {
         $mask_file = $files['mask'];
         if ( $mask_file['error'] === UPLOAD_ERR_OK ) {
           $mask_data = file_get_contents( $mask_file['tmp_name'] );
-          $query->set_mask( Meow_MWAI_Query_DroppedFile::from_data( $mask_data, 'vision', $mask_file['type'] ) );
+          $query->set_mask( Meow_MWAI_Query_DroppedFile::from_data( $mask_data, 'analysis', $mask_file['type'] ) );
         }
       }
 
@@ -1342,9 +1330,13 @@ class Meow_MWAI_Rest {
         $ignored_ids = array_map( 'intval', $ignored_ids );
         $exclude_sql = ' AND p.ID NOT IN (' . implode( ',', $ignored_ids ) . ')';
       }
+      $mimeFilter = '';
+      if ( $postType === 'attachment' ) {
+        $mimeFilter = " AND p.post_mime_type LIKE 'image/%'";
+      }
       $query = "SELECT COUNT(*) FROM {$wpdb->posts} p
                 WHERE p.post_type = %s
-                AND p.post_status IN ($statusPlaceholders)" . $exclude_sql;
+                AND p.post_status IN ($statusPlaceholders)" . $exclude_sql . $mimeFilter;
       $prepareArgs = array_merge( [ $postType ], $postStatus );
       $count = (int) $wpdb->get_var( $wpdb->prepare( $query, ...$prepareArgs ) );
       return $this->create_rest_response( [ 'success' => true, 'count' => $count ], 200 );
@@ -1372,10 +1364,14 @@ class Meow_MWAI_Rest {
         $ignored_ids = array_map( 'intval', $ignored_ids );
         $exclude_sql = ' AND p.ID NOT IN (' . implode( ',', $ignored_ids ) . ')';
       }
+      $mimeFilter = '';
+      if ( $postType === 'attachment' ) {
+        $mimeFilter = " AND p.post_mime_type LIKE 'image/%'";
+      }
       $query = "SELECT p.ID FROM {$wpdb->posts} p
                 WHERE p.post_type = %s
-                AND p.post_status IN ($statusPlaceholders)" . $exclude_sql . "
-                ORDER BY p.ID ASC";
+                AND p.post_status IN ($statusPlaceholders)" . $exclude_sql . $mimeFilter . '
+                ORDER BY p.ID ASC';
 
       $prepareArgs = array_merge( [ $postType ], $postStatus );
       $postIds = $wpdb->get_col( $wpdb->prepare( $query, ...$prepareArgs ) );
@@ -1618,7 +1614,28 @@ class Meow_MWAI_Rest {
       $templates_option = get_option( 'mwai_templates', [] );
       if ( !is_array( $templates_option ) ) {
         update_option( 'mwai_templates', [] );
+        $templates_option = [];
       }
+
+      // Migration: DALL-E was removed (deprecated by OpenAI). Move templates to gpt-image-1.5.
+      // TODO: Remove after 2027-04 (1 year after the shutdown on 2026-05-12).
+      $deprecated = [ 'dall-e', 'dall-e-2', 'dall-e-3', 'dall-e-3-hd' ];
+      $migrated = false;
+      foreach ( $templates_option as &$group ) {
+        if ( !empty( $group['templates'] ) && is_array( $group['templates'] ) ) {
+          foreach ( $group['templates'] as &$template ) {
+            if ( isset( $template['model'] ) && in_array( $template['model'], $deprecated, true ) ) {
+              $template['model'] = MWAI_FALLBACK_MODEL_IMAGES;
+              $migrated = true;
+            }
+          }
+        }
+      }
+      unset( $group, $template );
+      if ( $migrated ) {
+        update_option( 'mwai_templates', $templates_option );
+      }
+
       $categories = array_column( $templates_option, 'category' );
       $index = array_search( $category, $categories );
       $templates = [];
@@ -1965,12 +1982,15 @@ class Meow_MWAI_Rest {
       $params = $request->get_json_params();
       $title = isset( $params['title'] ) ? $params['title'] : 'Untitled Form';
 
-      $post_data = [
+      // wp_insert_post expects slashed data - it calls wp_unslash() internally, which would
+      // otherwise strip backslashes from block-comment JSON escapes (e.g. \n → n) and corrupt
+      // the stored blocks.
+      $post_data = wp_slash( [
         'post_title' => $title,
         'post_content' => '',
         'post_status' => 'draft',
         'post_type' => 'mwai_form'
-      ];
+      ] );
 
       $post_id = wp_insert_post( $post_data );
 
@@ -2023,7 +2043,10 @@ class Meow_MWAI_Rest {
         $post_data['post_status'] = $params['status'];
       }
 
-      $result = wp_update_post( $post_data );
+      // wp_update_post expects slashed data - it calls wp_unslash() internally, which would
+      // otherwise strip backslashes from block-comment JSON escapes (e.g. \n → n) and break
+      // Gutenberg blocks on reload.
+      $result = wp_update_post( wp_slash( $post_data ) );
 
       if ( is_wp_error( $result ) ) {
         return $this->create_rest_response( [ 'success' => false, 'message' => $result->get_error_message() ], 500 );

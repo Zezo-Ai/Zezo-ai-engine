@@ -752,6 +752,13 @@ class Meow_MWAI_Modules_Discussions {
     }
 
     if ( $this->db_check ) {
+      // TODO: Remove after 2026-10-15. Upgrade legacy TEXT (64KB) messages column to MEDIUMTEXT (16MB)
+      // so long conversations aren't truncated on insert.
+      $column_info = $this->wpdb->get_row( "SHOW COLUMNS FROM $this->table_chats WHERE Field = 'messages'" );
+      if ( $column_info && stripos( $column_info->Type, 'mediumtext' ) === false
+        && stripos( $column_info->Type, 'longtext' ) === false ) {
+        $this->wpdb->query( "ALTER TABLE $this->table_chats MODIFY COLUMN messages MEDIUMTEXT NOT NULL" );
+      }
       update_option( 'mwai_db_version_discussions', MWAI_VERSION, true );
     }
 
@@ -765,7 +772,7 @@ class Meow_MWAI_Modules_Discussions {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 userId BIGINT(20) NULL,
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ip VARCHAR(64) NULL,
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     title VARCHAR(64) NULL,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      messages TEXT NOT NULL NULL,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      messages MEDIUMTEXT NOT NULL NULL,
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       extra LONGTEXT NOT NULL NULL,
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       botId VARCHAR(64) NULL,
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         chatId VARCHAR(64) NOT NULL,
@@ -785,7 +792,23 @@ class Meow_MWAI_Modules_Discussions {
    */
   public function handle_cleanup_task( $result, $job ) {
     $start = microtime( true );
-    $retention_days = 90; // 3 months retention period
+    $retention_option = $this->core->get_option( 'chatbot_discussions_retention_days' );
+    // "Never" (or 0 / negative) disables the cleanup entirely.
+    if ( $retention_option === 'Never' || (int) $retention_option <= 0 ) {
+      return [
+        'ok' => true,
+        'done' => true,
+        'message' => 'Discussions cleanup disabled (retention set to Never)',
+      ];
+    }
+    $retention_days = (int) apply_filters( 'mwai_discussions_retention_days', (int) $retention_option );
+    if ( $retention_days <= 0 ) {
+      return [
+        'ok' => true,
+        'done' => true,
+        'message' => 'Discussions cleanup disabled by filter',
+      ];
+    }
     $cutoff = date( 'Y-m-d H:i:s', strtotime( "-{$retention_days} days" ) );
 
     // Check if discussions table exists

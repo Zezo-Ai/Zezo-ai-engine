@@ -169,7 +169,7 @@ class Meow_MWAI_Engines_OpenAI extends Meow_MWAI_Engines_ChatML {
       // For Responses API, feedback queries MUST use previous_response_id to maintain conversation state
       if ( $historyStrategy === 'response_id' && !empty( $query->previousResponseId ) ) {
         // Use ResponseIdManager to validate the response ID
-        if ( $this->core->responseIdManager->is_valid_for_responses_api( $query->previousResponseId ) ) {
+        if ( $this->core->responseIdManager->is_responses_api_id( $query->previousResponseId ) ) {
           // Use incremental mode with previous_response_id
           $body['previous_response_id'] = $query->previousResponseId;
 
@@ -530,17 +530,11 @@ class Meow_MWAI_Engines_OpenAI extends Meow_MWAI_Engines_ChatML {
       // Usage tracking is handled differently in the streaming response
     }
     else if ( $query instanceof Meow_MWAI_Query_Image ) {
-      // For image generation, we can use the integrated approach
-      if ( strpos( $query->model, 'gpt-image' ) === 0 ) {
-        $body['tools'] = [[
-          'type' => 'image_generation'
-        ]];
-        $body['input'] = $query->get_message();
-      }
-      else {
-        // Fallback to old API for DALL-E models
-        return $this->build_body( $query, $streamCallback );
-      }
+      // gpt-image models use the integrated image_generation tool
+      $body['tools'] = [[
+        'type' => 'image_generation'
+      ]];
+      $body['input'] = $query->get_message();
     }
 
     // Debug logging for feedback queries

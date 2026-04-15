@@ -2041,16 +2041,16 @@
 @media (max-width: 760px) {
   .mwai-timeless-theme.mwai-window.mwai-open {
     position: fixed;
-    top: 0 !important;
+    top: var(--mwai-vv-offset-top, 0) !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: 0 !important;
+    bottom: var(--mwai-vv-offset-bottom, 0) !important;
     width: 100%;
     min-height: 100%;
     min-height: 100vh;
-    min-height: 100dvh;
-    height: 100dvh;
-    max-height: 100dvh;
+    min-height: var(--mwai-vv-height, 100dvh);
+    height: var(--mwai-vv-height, 100dvh);
+    max-height: var(--mwai-vv-height, 100dvh);
     max-width: 100%;
     margin: 0;
     z-index: 999999;
@@ -2155,19 +2155,19 @@
     stroke: var(--mwai-headerColor);
   }
   .mwai-timeless-theme.mwai-window.mwai-open.mwai-center-open {
-    top: 0 !important;
+    top: var(--mwai-vv-offset-top, 0) !important;
     left: 0 !important;
     transform: none !important;
     right: 0 !important;
-    bottom: 0 !important;
+    bottom: var(--mwai-vv-offset-bottom, 0) !important;
     width: 100% !important;
     max-width: 100% !important;
-    height: 100dvh !important;
+    height: var(--mwai-vv-height, 100dvh) !important;
   }
   .mwai-timeless-theme.mwai-window.mwai-open .mwai-input {
     flex-direction: column;
   }
-  .mwai-timeless-theme.mwai-window.mwai-open .mwai-input button {
+  .mwai-timeless-theme.mwai-window.mwai-open .mwai-input button:not(.mwai-input-submit) {
     font-size: 16px;
     margin-left: 0;
     width: 100%;
@@ -2341,7 +2341,8 @@
   z-index: 100;
 }
 .mwai-timeless-theme .mwai-reply-actions .mwai-copy-button,
-.mwai-timeless-theme .mwai-reply-actions .mwai-download-button {
+.mwai-timeless-theme .mwai-reply-actions .mwai-download-button,
+.mwai-timeless-theme .mwai-reply-actions .mwai-pdf-button {
   fill: var(--mwai-fontColor);
   padding: 3px 5px;
   width: 24px;
@@ -2351,7 +2352,8 @@
   border-radius: 5px;
 }
 .mwai-timeless-theme .mwai-reply-actions .mwai-copy-button:hover,
-.mwai-timeless-theme .mwai-reply-actions .mwai-download-button:hover {
+.mwai-timeless-theme .mwai-reply-actions .mwai-download-button:hover,
+.mwai-timeless-theme .mwai-reply-actions .mwai-pdf-button:hover {
   filter: brightness(1.2);
 }
 .mwai-timeless-theme .mwai-reply-actions.mwai-hidden {
@@ -2972,11 +2974,13 @@
   right: -6px;
 }
 .mwai-timeless-theme .mwai-reply-actions .mwai-copy-button,
-.mwai-timeless-theme .mwai-reply-actions .mwai-download-button {
+.mwai-timeless-theme .mwai-reply-actions .mwai-download-button,
+.mwai-timeless-theme .mwai-reply-actions .mwai-pdf-button {
   padding-top: 4px;
 }
 .mwai-timeless-theme .mwai-reply-actions .mwai-copy-button:hover,
-.mwai-timeless-theme .mwai-reply-actions .mwai-download-button:hover {
+.mwai-timeless-theme .mwai-reply-actions .mwai-download-button:hover,
+.mwai-timeless-theme .mwai-reply-actions .mwai-pdf-button:hover {
   fill: var(--mwai-backgroundPrimaryColor);
   background: var(--mwai-backgroundUserColor);
 }

@@ -11,8 +11,6 @@ class Meow_MWAI_Reply implements JsonSerializable {
     'price' => null,
     'accuracy' => 'none', // 'none', 'estimated', 'tokens', 'price', 'full'
   ];
-  // TODO: Remove after January 2026 - Use $usage['accuracy'] instead
-  public $usageAccuracy = 'none';
   public $query = null;
   public $type = 'text';
   public $model = null; // Actual model used by the API (may differ from query model)
@@ -65,7 +63,6 @@ class Meow_MWAI_Reply implements JsonSerializable {
   }
 
   public function set_usage_accuracy( $accuracy ) {
-    $this->usageAccuracy = $accuracy;
     $this->usage['accuracy'] = $accuracy;
   }
 
@@ -110,7 +107,7 @@ class Meow_MWAI_Reply implements JsonSerializable {
   }
 
   public function get_usage_accuracy() {
-    return $this->usageAccuracy;
+    return $this->usage['accuracy'] ?? 'none';
   }
 
   public function get_units() {
@@ -276,7 +273,6 @@ class Meow_MWAI_Reply implements JsonSerializable {
 
         // It's url/image
         else if ( isset( $choice['url'] ) ) {
-          // TODO: DALL-E 2 and 3 were using URLs, but now they are using b64_json (gpt-image-1 kind of enforced it)
           $url = trim( $choice['url'] );
           $this->results[] = $url;
           $this->result = $url;
@@ -292,7 +288,7 @@ class Meow_MWAI_Reply implements JsonSerializable {
             $expiry = 1 * HOUR_IN_SECONDS; // 1 hour for temporary images
           }
           else {
-            // Use the user's AI-generated image settings (same as DALL-E uses)
+            // Use the user's AI-generated image settings
             $localDownload = $mwai_core->get_option( 'image_local_download' );
             $expiry = (int) $mwai_core->get_option( 'image_expires_download' );
           }

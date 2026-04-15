@@ -111,8 +111,7 @@ class Meow_MWAI_Query_Image extends Meow_MWAI_Query_Base {
   public function final_checks() {
     parent::final_checks();
 
-    // Since DALL-E 3 only supports 1 image, we force it.
-    // (Likely the same limitation for other models.)
+    // Force a single image per request (matches the supported behavior of current image models).
     $this->maxResults = 1;
 
     global $mwai_core;

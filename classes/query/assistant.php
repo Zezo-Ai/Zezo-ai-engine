@@ -3,6 +3,7 @@
 class Meow_MWAI_Query_Assistant extends Meow_MWAI_Query_Base implements JsonSerializable {
   // Core Content
   public ?Meow_MWAI_Query_DroppedFile $attachedFile = null;
+  public ?array $attachedFiles = null;
 
   // Parameters
   public ?string $chatId = null;
@@ -48,10 +49,14 @@ class Meow_MWAI_Query_Assistant extends Meow_MWAI_Query_Base implements JsonSeri
 
     if ( !empty( $this->attachedFile ) ) {
       $json['context']['hasFile'] = true;
-      // Assistant only supports URL for now.
       if ( $this->attachedFile->get_type() === 'url' ) {
         $json['context']['fileUrl'] = $this->attachedFile->get_url();
       }
+    }
+
+    if ( !empty( $this->attachedFiles ) ) {
+      $json['context']['hasFiles'] = true;
+      $json['context']['fileCount'] = count( $this->attachedFiles );
     }
 
     return $json;
@@ -63,17 +68,29 @@ class Meow_MWAI_Query_Assistant extends Meow_MWAI_Query_Base implements JsonSeri
 
   /**
    * Get all attached files as a normalized array.
-   * TODO: Remove after April 2026 - Legacy attachedFile support
-   *
    * @return Meow_MWAI_Query_DroppedFile[] Array of attached files
    */
   public function getAttachments(): array {
-    // Assistant queries currently only support single file (attachedFile)
-    // Return it as an array for consistency
-    if ( $this->attachedFile ) {
-      return [ $this->attachedFile ];
+    $files = $this->attachedFiles ?? [];
+    if ( $this->attachedFile && !in_array( $this->attachedFile, $files, true ) ) {
+      array_unshift( $files, $this->attachedFile );
     }
-    return [];
+    return $files;
+  }
+
+  public function add_file( Meow_MWAI_Query_DroppedFile $file ): void {
+    if ( $this->attachedFiles === null ) {
+      $this->attachedFiles = [];
+    }
+    $this->attachedFiles[] = $file;
+  }
+
+  public function set_files( array $files ): void {
+    $this->attachedFiles = $files;
+  }
+
+  public function get_files(): ?array {
+    return $this->attachedFiles;
   }
 
   #endregion

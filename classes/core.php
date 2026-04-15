@@ -815,23 +815,14 @@ class Meow_MWAI_Core {
 
   // Quick and dirty token estimation
   // Let's keep this synchronized with Helpers in JS
-  public static function estimate_tokens( ...$args ): int {
+  public static function estimate_tokens( $text = '', $model = null ): int {
     global $mwai_core;
     if ( $mwai_core && $mwai_core->usageStatsService ) {
-      return $mwai_core->usageStatsService->estimate_tokens( ...$args );
+      return $mwai_core->usageStatsService->estimate_tokens( $text, $model );
     }
     // Fallback to original implementation if service not available
-    $text = '';
-    foreach ( $args as $arg ) {
-      if ( is_array( $arg ) ) {
-        foreach ( $arg as $message ) {
-          $text .= isset( $message['content']['text'] ) ? $message['content']['text'] : '';
-          $text .= isset( $message['content'] ) && is_string( $message['content'] ) ? $message['content'] : '';
-        }
-      }
-      else if ( is_string( $arg ) ) {
-        $text .= $arg;
-      }
+    if ( !is_string( $text ) ) {
+      $text = is_array( $text ) || is_object( $text ) ? json_encode( $text ) : (string) $text;
     }
     $averageTokenLength = 4;
     $words = preg_split( '/\s+/', trim( $text ) );
@@ -985,6 +976,14 @@ class Meow_MWAI_Core {
         $chatbot['fileUploads'] = $chatbot['fileUpload'] ? $chatbot['maxUploads'] : 0;
         $chatbot['multiUpload'] = $chatbot['fileUpload'] && $chatbot['maxUploads'] > 1;
         $chatbot['imageUpload'] = $chatbot['fileUpload']; // Keep imageUpload in sync
+      }
+
+      // Migration: DALL-E was removed (deprecated by OpenAI). Move chatbots to gpt-image-1.5.
+      // TODO: Remove after 2027-04 (1 year after the shutdown on 2026-05-12).
+      if ( isset( $chatbot['model'] )
+        && in_array( $chatbot['model'], [ 'dall-e', 'dall-e-2', 'dall-e-3', 'dall-e-3-hd' ], true ) ) {
+        $chatbot['model'] = MWAI_FALLBACK_MODEL_IMAGES;
+        $hasChanges = true;
       }
 
       // if ( isset( $chatbot['context'] ) ) {
@@ -1509,6 +1508,14 @@ class Meow_MWAI_Core {
           $needs_update = true;
         }
       }
+    }
+
+    // Migration: DALL-E was removed (deprecated by OpenAI). Move users to gpt-image-1.5.
+    // TODO: Remove after 2027-04 (1 year after the shutdown on 2026-05-12).
+    if ( isset( $options['ai_images_default_model'] )
+      && in_array( $options['ai_images_default_model'], [ 'dall-e', 'dall-e-2', 'dall-e-3', 'dall-e-3-hd' ], true ) ) {
+      $options['ai_images_default_model'] = MWAI_FALLBACK_MODEL_IMAGES;
+      $needs_update = true;
     }
 
     // All the models with an envId that does not exist anymore are removed.

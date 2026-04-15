@@ -1,7 +1,8 @@
 <?php
 
 class Meow_MWAI_Labs_MCP_Rest {
-  private $cache_key = 'mwai_mcp_tools_cache';
+  // Bump the suffix when build_schema_from_args() changes so old cached schemas are ignored.
+  private $cache_key = 'mwai_mcp_tools_cache_v2';
   private $allowed = [ 'posts', 'pages', 'media' ];
 
   public function __construct() {
@@ -121,11 +122,33 @@ class Meow_MWAI_Labs_MCP_Rest {
       'required' => [],
     ];
 
+    // JSON Schema keys worth forwarding from WordPress REST arg definitions.
+    // PHP callbacks (sanitize_callback/validate_callback) and WP-only keys (arg_options,
+    // required) are intentionally excluded - clients would choke on them.
+    $allowed_keys = [
+      'type', 'description', 'enum', 'default', 'format',
+      'items', 'properties', 'additionalProperties',
+      'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
+      'minLength', 'maxLength', 'pattern',
+      'minItems', 'maxItems', 'uniqueItems',
+      'oneOf', 'anyOf', 'allOf',
+    ];
+
     foreach ( $args as $name => $def ) {
-      $schema['properties'][ $name ] = [
-        'type' => $def['type'] ?? 'string',
-        'description' => $def['description'] ?? '',
-      ];
+      $property = [];
+      foreach ( $allowed_keys as $key ) {
+        if ( array_key_exists( $key, $def ) ) {
+          $property[ $key ] = $def[ $key ];
+        }
+      }
+      if ( !isset( $property['type'] ) ) {
+        $property['type'] = 'string';
+      }
+      if ( !isset( $property['description'] ) ) {
+        $property['description'] = '';
+      }
+
+      $schema['properties'][ $name ] = $property;
 
       if ( !empty( $def['required'] ) ) {
         $schema['required'][] = $name;

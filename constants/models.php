@@ -634,9 +634,9 @@ define( 'MWAI_OPENAI_MODELS', [
     'tags' => ['core', 'realtime', 'functions', 'vision', 'deprecated']
   ],
   /*
-      DALL·E 3
-      Our latest image generation model
-      https://platform.openai.com/docs/models/dall-e-3
+      GPT Image
+      OpenAI's image generation models (token-based pricing)
+      https://platform.openai.com/docs/models/gpt-image-1
       */
   [
     'model' => 'gpt-image-1.5',
@@ -727,60 +727,6 @@ define( 'MWAI_OPENAI_MODELS', [
     'unit' => 1 / 1000000,
     'finetune' => false,
     'tags' => ['core', 'image', 'image-edit', 'responses']
-  ],
-  [
-    'model' => 'dall-e-3',
-    'name' => 'DALL-E 3',
-    'family' => 'dall-e',
-    'features' => ['text-to-image'],
-    'resolutions' => [
-      [
-        'name' => '1024x1024',
-        'label' => '1024x1024',
-        'price' => 0.040
-      ],
-      [
-        'name' => '1024x1792',
-        'label' => '1024x1792',
-        'price' => 0.080
-      ],
-      [
-        'name' => '1792x1024',
-        'label' => '1792x1024',
-        'price' => 0.080
-      ]
-    ],
-    'type' => 'image',
-    'unit' => 1,
-    'finetune' => false,
-    'tags' => ['core', 'image']
-  ],
-  [
-    'model' => 'dall-e-3-hd',
-    'name' => 'DALL-E 3 (HD)',
-    'family' => 'dall-e',
-    'features' => ['text-to-image'],
-    'resolutions' => [
-      [
-        'name' => '1024x1024',
-        'label' => '1024x1024',
-        'price' => 0.080
-      ],
-      [
-        'name' => '1024x1792',
-        'label' => '1024x1792',
-        'price' => 0.120
-      ],
-      [
-        'name' => '1792x1024',
-        'label' => '1792x1024',
-        'price' => 0.120
-      ]
-    ],
-    'type' => 'image',
-    'unit' => 1,
-    'finetune' => false,
-    'tags' => ['core', 'image']
   ],
   /*
     Sora 2
@@ -918,36 +864,6 @@ define( 'MWAI_OPENAI_MODELS', [
     'finetune' => false,
     'tags' => ['core', 'audio'],
   ],
-  /*
-                  Deprecated Models
-                  */
-  [
-    'model' => 'dall-e',
-    'name' => 'DALL-E 2',
-    'family' => 'dall-e',
-    'features' => ['text-to-image'],
-    'resolutions' => [
-      [
-        'name' => '256x256',
-        'label' => '256x256',
-        'price' => 0.016
-      ],
-      [
-        'name' => '512x512',
-        'label' => '512x512',
-        'price' => 0.018
-      ],
-      [
-        'name' => '1024x1024',
-        'label' => '1024x1024',
-        'price' => 0.020
-      ]
-    ],
-    'type' => 'image',
-    'unit' => 1,
-    'finetune' => false,
-    'tags' => ['core', 'image', 'deprecated']
-  ],
 ] );
 
 define( 'MWAI_ANTHROPIC_MODELS', [
@@ -963,7 +879,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'type' => 'token',
     'unit' => 1 / 1000000,
     'maxCompletionTokens' => 128000,
-    'maxContextualTokens' => 200000,
+    'maxContextualTokens' => 1000000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'latest'],
     'tools' => ['code_interpreter', 'thinking']
@@ -997,7 +913,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'type' => 'token',
     'unit' => 1 / 1000000,
     'maxCompletionTokens' => 64000,
-    'maxContextualTokens' => 200000,
+    'maxContextualTokens' => 1000000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'latest'],
     'tools' => ['code_interpreter', 'thinking']

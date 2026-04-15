@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.4.5
+Stable tag: 3.4.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,7 +25,7 @@ For developers: [internal APIs](https://ai.thehiddendocs.com/php-functions/), [R
 
 Feeling overwhelmed? 🤪 Start simple: Create a chatbot. Then connect [Claude Code](https://ai.thehiddendocs.com/mcp/mcp-server-claude-code/), [Claude](https://ai.thehiddendocs.com/mcp/mcp-server-claude/), [ChatGPT](https://ai.thehiddendocs.com/mcp/mcp-server-chatgpt/), or [OpenClaw](https://openclaw.com/) through MCP, giving AI direct access to your site. Add [SEO Engine](https://wordpress.org/plugins/seo-engine/) and watch it manage SEO in ways you never imagined. You can even connect AI Engine to multiple WordPress sites and manage them all through conversation.
 
-You'll be having a blast before you've explored everything.
+You'll be having a blast before you've explored everything. You'll probably spot bits of AI Engine in plenty of other AI plugins, code and UI alike. Flattering, really... or fishy? 🤣 But only AI Engine keeps pushing forward with real care for its community, a drive toward perfection, and the patience to get the details right.
 
 == Core Modules ==
 
@@ -263,6 +263,28 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.4.6 (2026/04/15) =
+* Add: Print-to-PDF button next to the copy icon on the last AI message, allowing export of the full conversation via the browser's Save as PDF dialog.
+* Add: Retention setting for discussions cleanup under Settings > Chatbot > Discussions, with a `mwai_discussions_retention_days` filter for overrides.
+* Fix: Chatbot auto-scroll no longer fights users who scroll up during streaming.
+* Fix: AI Form and Chatbot blocks no longer save as "Unsupported" placeholders when used in patterns created via Appearance > Editor.
+* Fix: Hardened chatbot parameter processing so non-string values no longer crash the frontend with "trim is not a function".
+* Fix: (Hotfix) Two mobile chatbot issues — keyboard pushing header and messages off-screen, and ChatGPT theme's submit button stretching into an oval below the input pill.
+* Fix: Blocks with line breaks breaking after save in the Forms editor.
+* Fix: REST MCP tools failing schema validation by forwarding nested JSON Schema fields (items, enum, default, etc.) from WordPress REST arg definitions.
+* Fix: NekoUI dropdowns rendering broken inside Gutenberg block iframes.
+* Fix: Temperature settings missing for Anthropic models in chatbot params.
+* Fix: `ai.formReply` filter firing on every stream chunk instead of only once when the reply is complete.
+* Update: Removed DALL-E and migrated existing defaults to gpt-image-1.
+* Update: Bumped the discussions messages column from TEXT to MEDIUMTEXT.
+* Update: Persisted the Query Mode and Expert Mode toggles in the Knowledge tab via localStorage.
+* Update: Simplified `estimate_tokens` to a single-argument signature and added multi-file support to assistant queries.
+* Update: Opus 4.6 and Sonnet 4.6 context window updated to 1M tokens.
+* 🎵 Discuss with others about Ai Engine on [the Discord](https://discord.gg/bHDGh38).
+* 🌴 Keep us motivated with [a little review here](https://wordpress.org/support/plugin/ai-engine/reviews/). Thank you!
+* 🥰 If you want to help us, check our [Patreon](https://www.patreon.com/meowapps). Thank you!
+* 🚀 [Click here](https://trello.com/b/8U9SdiMy/ai-engine-feature-requests) to vote for the features you want the most.
 
 = 3.4.5 (2026/03/22) =
 * Fix: Ensure additional CSS classes set in the block inspector.

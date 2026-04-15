@@ -282,7 +282,7 @@ class Meow_MWAI_API {
             if ( strpos( $chatbot['model'], 'realtime' ) !== false ) {
               $info['type'] = 'realtime';
             }
-            else if ( strpos( $chatbot['model'], 'image' ) !== false || strpos( $chatbot['model'], 'dall-e' ) !== false ) {
+            else if ( strpos( $chatbot['model'], 'image' ) !== false ) {
               $info['type'] = 'images';
             }
             else if ( !empty( $chatbot['assistantId'] ) ) {

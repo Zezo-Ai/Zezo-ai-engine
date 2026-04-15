@@ -140,12 +140,14 @@ class Meow_MWAI_Query_Base implements JsonSerializable {
   }
 
   public function get_in_tokens(): int {
-    $in_tokens = Meow_MWAI_Core::estimate_tokens(
-      $this->messages,
-      $this->message,
-      $this->context ?? ''
-    );
-    return $in_tokens;
+    $text = '';
+    foreach ( $this->messages as $message ) {
+      $text .= isset( $message['content']['text'] ) ? $message['content']['text'] : '';
+      $text .= isset( $message['content'] ) && is_string( $message['content'] ) ? $message['content'] : '';
+    }
+    $text .= $this->message;
+    $text .= $this->context ?? '';
+    return Meow_MWAI_Core::estimate_tokens( $text );
   }
 
   /**
