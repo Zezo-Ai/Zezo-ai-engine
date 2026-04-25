@@ -1057,6 +1057,22 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
   }
 
   public function run_embedding_query( $query ) {
+    // Pre-validate token count against the embedding model's limit.
+    // OpenAI embedding models (text-embedding-3-small/large, ada-002) all cap
+    // at 8192 input tokens; sending a longer chunk yields an opaque
+    // "Invalid 'input': maximum context length is 8192 tokens" error. Count
+    // locally via tiktoken (bundled) so we fail with a clear message up front.
+    $embedding_max_tokens = apply_filters( 'mwai_embedding_max_tokens', 8192, $query->model );
+    if ( !empty( $query->message ) && $embedding_max_tokens > 0 ) {
+      $token_count = Meow_MWAI_Core::estimate_tokens( $query->message, $query->model );
+      if ( $token_count > $embedding_max_tokens ) {
+        throw new Exception( sprintf(
+          'Embedding input is %d tokens, exceeds the %d-token limit for %s. Split this entry into smaller chunks and try again.',
+          $token_count, $embedding_max_tokens, $query->model
+        ) );
+      }
+    }
+
     $body = $this->build_body( $query );
     $url = $this->build_url( $query );
     $headers = $this->build_headers( $query );

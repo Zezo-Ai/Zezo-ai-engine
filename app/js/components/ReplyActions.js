@@ -1,8 +1,8 @@
-// Previous: 3.3.3
-// Current: 3.4.6
+// Previous: 3.4.6
+// Current: 3.4.7
 
 ```javascript
-import { useClasses } from '@app/chatbot/helpers';
+import { useClasses, doPlaceholders } from '@app/chatbot/helpers';
 import { ChatbotContext } from '@app/chatbot/ChatbotContext';
 const { useState, useEffect, useRef, useCallback, useContext } = wp.element;
 
@@ -15,7 +15,7 @@ const svgPathPdf = '<path d="M18 16.75H16C15.8011 16.75 15.6103 16.671 15.4697 1
 const ReplyActions = ({ enabled, content, children, className, message, ...rest }) => {
   const css = useClasses();
   const chatCtx = useContext(ChatbotContext);
-  const { messages = [], aiName = '', userName = '', busy = false } = chatCtx?.state || {};
+  const { messages = [], aiName = '', userName = '', guestName = '', userData = null, busy = false, pdfButton = true } = chatCtx?.state || {};
   const [ copyStatus, setCopyStatus ] = useState('idle');
   const [ hidden, setHidden ] = useState(false);
   const [ embeddedImages, setEmbeddedImages ] = useState([]);
@@ -24,7 +24,7 @@ const ReplyActions = ({ enabled, content, children, className, message, ...rest 
   const containerRef = useRef(null);
 
   const isLastMessage = messages && messages.length > 0 && messages[messages.length - 1] === message;
-  const canExportPdf = !!message && message.role === 'assistant' && isLastMessage && !busy
+  const canExportPdf = pdfButton && !!message && message.role === 'assistant' && isLastMessage && !busy
     && (messages || []).every(m => (m.role === 'user' || m.role === 'assistant') && m.content);
 
   const onExportPdf = () => {
@@ -33,7 +33,8 @@ const ReplyActions = ({ enabled, content, children, className, message, ...rest 
     if (!printable.length) return;
     const title = `Conversation with ${aiName || 'AI'}`;
     const timestamp = new Date().toLocaleString();
-    const me = userName || 'You';
+    const resolvedUser = userData ? doPlaceholders(userName, userData) : (guestName || userName);
+    const me = resolvedUser || 'You';
     const ai = aiName || 'AI';
     const body = printable.map((m) => `
       <section class="msg ${m.role}">
@@ -190,9 +191,9 @@ const ReplyActions = ({ enabled, content, children, className, message, ...rest 
 
   return (
     <div {...rest} ref={containerRef} onMouseLeave={handleMouseLeave} onMouseEnter={handleMouseEnter} onMouseOver={handleMouseEnter}>
-      <div className={className}>
+      <span className={className}>
         {children}
-      </div>
+      </span>
       {hasActions && (
         <div className={css('mwai-reply-actions', { 'mwai-hidden': hidden })}>
           {enabled && <div className="mwai-copy-button" onClick={onCopy}>

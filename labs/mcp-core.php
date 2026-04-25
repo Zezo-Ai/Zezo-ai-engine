@@ -1128,7 +1128,7 @@ class Meow_MWAI_Labs_MCP_Core {
           $ins['meta_input'] = $meta_input;
         }
 
-        $new = wp_insert_post( $ins, true );
+        $new = wp_insert_post( wp_slash( $ins ), true );
         if ( is_wp_error( $new ) ) {
           $r['error'] = [ 'code' => $new->get_error_code(), 'message' => $new->get_error_message() ];
         }
@@ -1211,7 +1211,7 @@ class Meow_MWAI_Labs_MCP_Core {
         // Update post fields if any
         $u = $post_id;
         if ( $has_fields ) {
-          $u = wp_update_post( $c, true );
+          $u = wp_update_post( wp_slash( $c ), true );
           if ( is_wp_error( $u ) ) {
             $r['error'] = [ 'code' => $u->get_error_code(), 'message' => $u->get_error_message() ];
             break;
@@ -1316,7 +1316,10 @@ class Meow_MWAI_Labs_MCP_Core {
           break;
         }
 
-        $update = wp_update_post( [ 'ID' => $post_id, $field => $new_content ], true );
+        // wp_update_post() runs wp_unslash() internally, which would strip the
+        // backslash from Unicode escapes like \u003c in block JSON (Rank Math
+        // FAQ, etc.) and silently corrupt the post. Pre-slash to compensate.
+        $update = wp_update_post( wp_slash( [ 'ID' => $post_id, $field => $new_content ] ), true );
         if ( is_wp_error( $update ) ) {
           $r['error'] = [ 'code' => $update->get_error_code(), 'message' => $update->get_error_message() ];
           break;
@@ -1589,7 +1592,7 @@ class Meow_MWAI_Labs_MCP_Core {
             throw new Exception( $id->get_error_message(), $id->get_error_code() );
           }
           if ( $a['title'] ?? '' ) {
-            wp_update_post( [ 'ID' => $id, 'post_title' => sanitize_text_field( $a['title'] ) ] );
+            wp_update_post( wp_slash( [ 'ID' => $id, 'post_title' => sanitize_text_field( $a['title'] ) ] ) );
           }
           if ( $a['alt'] ?? '' ) {
             update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $a['alt'] ) );
@@ -1645,7 +1648,7 @@ class Meow_MWAI_Labs_MCP_Core {
         if ( $a['description'] ?? '' ) {
           $upd['post_content'] = $this->clean_html( $a['description'] );
         }
-        $u = wp_update_post( $upd, true );
+        $u = wp_update_post( wp_slash( $upd ), true );
         if ( is_wp_error( $u ) ) {
           $r['error'] = [ 'code' => $u->get_error_code(), 'message' => $u->get_error_message() ];
         }
@@ -1723,7 +1726,7 @@ class Meow_MWAI_Labs_MCP_Core {
           $upd['post_content'] = $this->clean_html( $a['description'] );
         }
         if ( count( $upd ) > 1 ) {
-          wp_update_post( $upd, true );
+          wp_update_post( wp_slash( $upd ), true );
         }
         if ( array_key_exists( 'alt', $a ) ) {
           update_post_meta( $mid, '_wp_attachment_image_alt', sanitize_text_field( (string) $a['alt'] ) );

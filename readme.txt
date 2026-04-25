@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.4.6
+Stable tag: 3.4.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -263,6 +263,22 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.4.7 (2026/04/25) =
+* Add: GPT-5.5, GPT Image 2, and Claude Opus 4.7 to the model lists.
+* Update: Refreshed default fallback models to GPT-5.4 and GPT-5-mini, and marked several upcoming OpenAI shutdowns as deprecated (gpt-5-chat-latest, gpt-4.1-nano, o3-mini, gpt-realtime-mini, gpt-image-1, sora-2, sora-2-pro).
+* Update: Major UI/UX updates! I hope you'll enjoy them, otherwise... let me know! 😊
+* Add: New Environments panel on the Dashboard with brand-colored rows, smart setup messages, and warnings for missing or deprecated default models.
+* Fix: MCP write helpers (wp_alter_post, wp_update_post) were silently stripping backslashes from Unicode escapes.
+* Add: Live timer on the Image Generator "Generating..." row so progress is visible.
+* Fix: Auto-open is now skipped on mobile so a fullscreen chatbot no longer hijacks the screen on page load.
+* Fix: AI Forms not rendering with their theme CSS when embedded via a synced Pattern.
+* Add: Split print-to-PDF into its own toggle, moved behind a new "More options..." modal in Appearance settings.
+* Update: Redesigned the Usage and Activity widgets with compact CSS-only stacked bars grouped by provider.
+* Fix: Oversized embedding inputs are now caught before they hit OpenAI's 8192-token limit.
+* Add: System-prompt hint for Anthropic's code_execution tool so Claude uses the sandbox instead of refusing.
+* Update: Switched chatbot and form shortcode displays to the NekoShortcode component.
+* Update: Functions section now appears as soon as the model supports it.
 
 = 3.4.6 (2026/04/15) =
 * Add: Print-to-PDF button next to the copy icon on the last AI message, allowing export of the full conversation via the browser's Save as PDF dialog.

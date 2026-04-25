@@ -177,6 +177,17 @@ class Meow_MWAI_Core {
       }
     }
 
+    // WP 7 Connectors integration (self-gates on WP 7+).
+    if ( class_exists( 'WP_Connector_Registry' ) ) {
+      new Meow_MWAI_Labs_WPAI_Connectors( $this );
+    }
+
+    // WP 7 AiClient gateway: register AI Engine as a provider in the
+    // AiClient registry so the WP AI framework can dispatch through us.
+    if ( class_exists( '\\WordPress\\AiClient\\AiClient' ) ) {
+      new Meow_MWAI_Labs_WPAI_Gateway( $this );
+    }
+
   }
 
   public function register_scripts() {
@@ -1111,7 +1122,7 @@ class Meow_MWAI_Core {
     $keepLineReturnsFields = [ 'instructions' ];
     $whiteSpacedFields = [ 'context' ];
     // Boolean fields that need proper conversion
-    $booleanFields = [ 'window', 'copyButton', 'fullscreen', 'localMemory', 'iconBubble', 'centerOpen',
+    $booleanFields = [ 'window', 'copyButton', 'pdfButton', 'fullscreen', 'localMemory', 'iconBubble', 'centerOpen',
       'imageUpload', 'fileUpload', 'multiUpload', 'fileSearch', 'contentAware', 'aiAvatar', 'userAvatar', 'guestAvatar' ];
     foreach ( $chatbots as &$chatbot ) {
       foreach ( $chatbot as $key => &$value ) {

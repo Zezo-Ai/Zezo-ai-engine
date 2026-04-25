@@ -4,6 +4,33 @@
 
 define( 'MWAI_OPENAI_MODELS', [
   /*
+    GPT-5.5
+    Latest flagship: tool-heavy agents, grounded assistants, long-context retrieval
+    https://developers.openai.com/api/docs/models/gpt-5.5
+    */
+  [
+    'model' => 'gpt-5.5',
+    'name' => 'GPT-5.5',
+    'family' => 'gpt-5',
+    'features' => ['completion'],
+    'price' => [
+      'in' => 5.00,
+      'out' => 30.00,
+      'cached' => 0.50,
+    ],
+    'type' => 'token',
+    'unit' => 1 / 1000000,
+    'maxCompletionTokens' => 128000,
+    'maxContextualTokens' => 1050000,
+    'finetune' => false,
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'json', 'responses', 'mcp', 'reasoning', 'verbosity', 'latest'],
+    'tools' => ['web_search', 'image_generation', 'file_search', 'code_interpreter'],
+    'params' => [
+      'reasoning' => ['none', 'low', 'medium', 'high', 'xhigh'],
+      'verbosity' => ['low', 'medium', 'high']
+    ]
+  ],
+  /*
     GPT-5.4
     Our most capable model for professional work
     https://platform.openai.com/docs/models/gpt-5.4
@@ -325,7 +352,8 @@ define( 'MWAI_OPENAI_MODELS', [
     'maxCompletionTokens' => 16384,
     'maxContextualTokens' => 128000,
     'finetune' => false,
-    'tags' => ['core', 'chat', 'vision', 'files', 'responses', 'mcp'],
+    // Shutdown: July 23, 2026.
+    'tags' => ['core', 'chat', 'vision', 'files', 'responses', 'mcp', 'deprecated'],
     'tools' => ['web_search', 'file_search', 'code_interpreter'],
     'params' => [
       'verbosity' => ['low', 'medium', 'high']
@@ -420,7 +448,8 @@ define( 'MWAI_OPENAI_MODELS', [
     'maxCompletionTokens' => 32768,
     'maxContextualTokens' => 1047576,
     'finetune' => false,
-    'tags' => ['core', 'chat', 'vision', 'functions', 'json', 'finetune', 'responses', 'mcp'],
+    // Shutdown: October 23, 2026.
+    'tags' => ['core', 'chat', 'vision', 'functions', 'json', 'finetune', 'responses', 'mcp', 'deprecated'],
     'tools' => ['image_generation']
   ],
   /*
@@ -510,7 +539,8 @@ define( 'MWAI_OPENAI_MODELS', [
     'unit' => 1 / 1000000,
     'maxCompletionTokens' => 100000,
     'maxContextualTokens' => 200000,
-    'tags' => ['core', 'chat', 'o1-model', 'reasoning', 'responses', 'mcp'],
+    // Shutdown: October 23, 2026.
+    'tags' => ['core', 'chat', 'o1-model', 'reasoning', 'responses', 'mcp', 'deprecated'],
     'tools' => ['web_search', 'image_generation', 'code_interpreter']
   ],
   /*
@@ -573,7 +603,8 @@ define( 'MWAI_OPENAI_MODELS', [
     'maxCompletionTokens' => 4096,
     'maxContextualTokens' => 32000,
     'finetune' => false,
-    'tags' => ['core', 'realtime', 'functions', 'vision']
+    // Shutdown: July 23, 2026.
+    'tags' => ['core', 'realtime', 'functions', 'vision', 'deprecated']
   ],
   /*
                 GPT-4o Realtime
@@ -639,6 +670,36 @@ define( 'MWAI_OPENAI_MODELS', [
       https://platform.openai.com/docs/models/gpt-image-1
       */
   [
+    'model' => 'gpt-image-2',
+    'name' => 'GPT Image 2',
+    'family' => 'gpt-image',
+    'features' => ['text-to-image'],
+    'resolutions' => [
+      [
+        'name' => '1024x1024',
+        'label' => '1024x1024'
+      ],
+      [
+        'name' => '1024x1536',
+        'label' => '1024x1536'
+      ],
+      [
+        'name' => '1536x1024',
+        'label' => '1536x1024'
+      ]
+    ],
+    'type' => 'token',
+    'mode' => 'image',
+    'price' => [
+      'in' => 8.00,
+      'out' => 30.00,
+      'cached' => 2.00
+    ],
+    'unit' => 1 / 1000000,
+    'finetune' => false,
+    'tags' => ['core', 'image', 'image-edit', 'responses']
+  ],
+  [
     'model' => 'gpt-image-1.5',
     'name' => 'GPT Image 1.5',
     'family' => 'gpt-image',
@@ -696,7 +757,8 @@ define( 'MWAI_OPENAI_MODELS', [
     ],
     'unit' => 1 / 1000000,
     'finetune' => false,
-    'tags' => ['core', 'image', 'image-edit', 'responses']
+    // Shutdown: October 23, 2026.
+    'tags' => ['core', 'image', 'image-edit', 'responses', 'deprecated']
   ],
   [
     'model' => 'gpt-image-1-mini',
@@ -754,7 +816,8 @@ define( 'MWAI_OPENAI_MODELS', [
     'type' => 'video',
     'unit' => 'second',
     'finetune' => false,
-    'tags' => ['core', 'video']
+    // Shutdown: September 24, 2026.
+    'tags' => ['core', 'video', 'deprecated']
   ],
   [
     'model' => 'sora-2-pro',
@@ -787,7 +850,8 @@ define( 'MWAI_OPENAI_MODELS', [
     'type' => 'video',
     'unit' => 'second',
     'finetune' => false,
-    'tags' => ['core', 'video']
+    // Shutdown: September 24, 2026.
+    'tags' => ['core', 'video', 'deprecated']
   ],
   // Embedding models:
   // OpenAI v3 models support Matryoshka embeddings (MRL) allowing dimension truncation
@@ -868,6 +932,23 @@ define( 'MWAI_OPENAI_MODELS', [
 
 define( 'MWAI_ANTHROPIC_MODELS', [
   [
+    'model' => 'claude-opus-4-7',
+    'name' => 'Claude Opus 4.7',
+    'family' => 'claude-4',
+    'features' => ['completion'],
+    'price' => [
+      'in' => 5.00,
+      'out' => 25.00,
+    ],
+    'type' => 'token',
+    'unit' => 1 / 1000000,
+    'maxCompletionTokens' => 128000,
+    'maxContextualTokens' => 1000000,
+    'finetune' => false,
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature', 'latest'],
+    'tools' => ['code_interpreter', 'thinking']
+  ],
+  [
     'model' => 'claude-opus-4-6',
     'name' => 'Claude Opus 4.6',
     'family' => 'claude-4',
@@ -881,7 +962,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxCompletionTokens' => 128000,
     'maxContextualTokens' => 1000000,
     'finetune' => false,
-    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'latest'],
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
     'tools' => ['code_interpreter', 'thinking']
   ],
   [

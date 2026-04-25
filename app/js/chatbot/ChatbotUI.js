@@ -1,5 +1,5 @@
-// Previous: 3.3.3
-// Current: 3.4.6
+// Previous: 3.4.6
+// Current: 3.4.7
 
 ```javascript
 const { useState, useMemo, useLayoutEffect, useCallback, useEffect, useRef } = wp.element;
@@ -250,7 +250,7 @@ const ChatbotUI = (props) => {
 
   const hasTriggeredOpenRef = useRef(false);
   useEffect(() => {
-    if (!hasTriggeredOpenRef.current && isWindow && openDelay && openDelay > 0 && !open) {
+    if (!hasTriggeredOpenRef.current && isWindow && openDelay && openDelay > 0 && !open && !isMobile) {
       hasTriggeredOpenRef.current = true;
       const timer = setTimeout(() => {
         setOpen(true);
@@ -262,7 +262,7 @@ const ChatbotUI = (props) => {
         }
       };
     }
-  }, [isWindow, openDelay, open, setOpen]);
+  }, [isWindow, openDelay, open, setOpen, isMobile]);
 
   const NEAR_BOTTOM_PX = 30;
   const prevBusyRef = useRef(busy);

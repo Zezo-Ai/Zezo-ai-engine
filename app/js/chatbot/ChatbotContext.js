@@ -1,5 +1,5 @@
-// Previous: 3.4.2
-// Current: 3.4.6
+// Previous: 3.4.6
+// Current: 3.4.7
 
 ```javascript
 const { useContext, createContext, useState, useMemo, useEffect, useCallback, useRef } = wp.element;
@@ -178,7 +178,7 @@ export const ChatbotContextProvider = ({ children, ...rest }) => {
   const processedParams = processParameters(params, userData);
   const { aiName, userName, guestName, aiAvatar, userAvatar, guestAvatar } = processedParams;
   const { textSend, textClear, textInputMaxLength, textInputPlaceholder, textCompliance,
-    window: isWindow, copyButton, headerSubtitle, popupTitle, fullscreen, localMemory: localMemoryParam,
+    window: isWindow, copyButton, pdfButton, headerSubtitle, popupTitle, fullscreen, localMemory: localMemoryParam,
     icon, iconText, iconTextDelay, iconAlt, iconPosition, centerOpen, width, maxHeight, openDelay, iconBubble, fileUpload, multiUpload, maxUploads, fileSearch, allowedMimeTypes, windowAnimation } = processedParams;
   
   const isRealtime = processedParams.mode === 'realtime';
@@ -1026,7 +1026,7 @@ export const ChatbotContextProvider = ({ children, ...rest }) => {
       const userMessageIndex = messages.length;
       let textToRetry = null;
       let fileToRetry = null;
-      if (userMessageIndex >= 0 && freshMessages[userMessageIndex]?.role === 'user') {
+      if (userMessageIndex >= 0 && freshMessages[userMessageIndex] && freshMessages[userMessageIndex].role === 'user') {
         const userMessage = freshMessages[userMessageIndex];
         const content = userMessage.content;
         const markdownMatch = content.match(/^(?:\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))\n(.*)$/s);
@@ -1299,10 +1299,12 @@ export const ChatbotContextProvider = ({ children, ...rest }) => {
     setIsListening,
     setDraggingType,
     setIsBlocked,
+
     onStartRealtimeSession,
     onRealtimeFunctionCallback,
     onCommitStats,
     onCommitDiscussions,
+
     updateComponentConfig,
   };
 
@@ -1336,7 +1338,7 @@ export const ChatbotContextProvider = ({ children, ...rest }) => {
     aiName, userName, guestName,
     aiAvatar, userAvatar, guestAvatar,
     aiAvatarUrl, userAvatarUrl, guestAvatarUrl,
-    isWindow, copyButton, headerSubtitle, popupTitle, fullscreen, icon, iconText, iconAlt, iconPosition, centerOpen, width, openDelay, iconBubble, windowAnimation,
+    isWindow, copyButton, pdfButton, headerSubtitle, popupTitle, fullscreen, icon, iconText, iconAlt, iconPosition, centerOpen, width, openDelay, iconBubble, windowAnimation,
     cssVariables, iconUrl,
     chatbotInputRef,
     conversationRef,

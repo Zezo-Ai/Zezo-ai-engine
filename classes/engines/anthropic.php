@@ -381,6 +381,16 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
 
   // Define a function to recursively replace empty arrays with empty stdClass objects
   // To avoid errors with OpenAI's API
+  // Some Anthropic models (Opus 4.7+) deprecated the `temperature` parameter
+  // and reject requests that include it. Models opt out via the 'no-temperature' tag.
+  protected function model_supports_temperature( $model ) {
+    if ( empty( $model ) ) {
+      return true;
+    }
+    $info = $this->retrieve_model_info( $model );
+    return empty( $info['tags'] ) || !in_array( 'no-temperature', $info['tags'] );
+  }
+
   private function replaceEmptyArrayWithObject( $item ) {
     if ( is_array( $item ) ) {
       if ( empty( $item ) ) {
@@ -401,7 +411,7 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
         'stream' => !is_null( $streamCallback ),
         'messages' => []
       ];
-      if ( !empty( $query->temperature ) ) {
+      if ( !empty( $query->temperature ) && $this->model_supports_temperature( $query->model ) ) {
         $body['temperature'] = $query->temperature;
       }
 
@@ -430,12 +440,28 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
           if ( is_array( $contentBlock ) ) {
             $serverManagedTypes = [
               'mcp_tool_use', 'mcp_tool_result',
-              'server_tool_use', 'web_search_tool_result'
+              'server_tool_use', 'web_search_tool_result',
+              // Code execution (code_execution_20250825) runs entirely on
+              // Anthropic's side, so the `_tool_use` blocks must be stripped
+              // when we replay the assistant message — only the server can
+              // produce the matching `_tool_result` blocks.
+              'code_execution_tool_use', 'code_execution_tool_result',
+              'bash_code_execution_tool_use', 'bash_code_execution_tool_result',
+              'text_editor_code_execution_tool_use', 'text_editor_code_execution_tool_result',
+            ];
+            // Block types that are server-produced RESULTS (we keep them out
+            // of the "stripped tools" warning list because they're not a
+            // dev-side limitation — they're just paired results).
+            $serverResultTypes = [
+              'mcp_tool_result', 'web_search_tool_result',
+              'code_execution_tool_result',
+              'bash_code_execution_tool_result',
+              'text_editor_code_execution_tool_result',
             ];
             $strippedTools = [];
             foreach ( $contentBlock as $item ) {
               $type = $item['type'] ?? '';
-              if ( in_array( $type, $serverManagedTypes ) && $type !== 'mcp_tool_result' && $type !== 'web_search_tool_result' ) {
+              if ( in_array( $type, $serverManagedTypes, true ) && !in_array( $type, $serverResultTypes, true ) ) {
                 $strippedTools[] = ( $item['name'] ?? $type ) . ' (' . ( $item['server_name'] ?? 'server' ) . ')';
               }
             }
@@ -569,7 +595,7 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
         $body['max_tokens'] = 4096;
       }
 
-      if ( !empty( $query->temperature ) ) {
+      if ( !empty( $query->temperature ) && $this->model_supports_temperature( $query->model ) ) {
         $body['temperature'] = $query->temperature;
       }
 
@@ -669,6 +695,18 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
           'type' => 'code_execution_20250825',
           'name' => 'code_execution'
         ];
+        // Anthropic recommends a system-prompt hint whenever code_execution is
+        // paired with user-defined tools, otherwise Claude often refuses to
+        // use the sandbox because it can't tell which environment to run in.
+        // https://platform.claude.com/docs/en/docs/agents-and-tools/tool-use/code-execution-tool
+        $code_exec_hint = "You have the built-in code_execution tool, which runs Python and bash commands"
+          . " in an Anthropic-hosted sandboxed container. Use it whenever computation, shell commands,"
+          . " file processing, or data analysis would help. It is separate from any client-provided"
+          . " functions; state is not shared between them.";
+        if ( !isset( $body['system'] ) ) {
+          $body['system'] = [];
+        }
+        $body['system'][] = [ 'type' => 'text', 'text' => $code_exec_hint ];
         Meow_MWAI_Logging::log( 'Anthropic: Added code_execution tool to request' );
       }
 
@@ -1146,57 +1184,49 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
 
   /**
    * Check the connection to Anthropic by listing available models.
-   * Anthropic doesn't provide a models endpoint, so we just verify authentication works.
    */
   public function connection_check() {
     try {
-      // Get the endpoint
       $endpoint = apply_filters( 'mwai_anthropic_endpoint', 'https://api.anthropic.com/v1', $this->env );
+      $url = trailingslashit( $endpoint ) . 'models';
 
-      // For Anthropic, we'll use the messages endpoint with a minimal request to verify auth
-      $url = trailingslashit( $endpoint ) . 'messages';
-
-      // Create a minimal query just to test authentication
-      $testBody = [
-        'model' => 'claude-3-haiku-20240307',  // Use cheapest model
-        'max_tokens' => 1,
-        'messages' => [
-          ['role' => 'user', 'content' => 'Hi']
+      $response = wp_remote_get( $url, [
+        'headers' => [
+          'x-api-key' => $this->apiKey,
+          'anthropic-version' => '2023-06-01',
         ],
-        'metadata' => [
-          'user_id' => 'connection_test'
-        ]
-      ];
+        'timeout' => 30,
+      ] );
 
-      // Build headers with a dummy query
-      $dummyQuery = new Meow_MWAI_Query_Text( 'test' );
-      $headers = $this->build_headers( $dummyQuery );
-      $options = $this->build_options( $headers, $testBody );
+      if ( is_wp_error( $response ) ) {
+        throw new Exception( $response->get_error_message() );
+      }
 
-      // Try to make a minimal request
-      $response = $this->run_query( $url, $options );
+      $code = wp_remote_retrieve_response_code( $response );
+      $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
-      // If we get here without exception, the API key is valid
-      // Get the list of available models from our constants
-      $models = $this->get_models();
-      $modelNames = array_map( function ( $model ) {
-        return $model['model'] ?? $model['name'] ?? 'unknown';
-      }, $models );
+      if ( $code === 401 || ( isset( $body['error']['type'] ) && $body['error']['type'] === 'authentication_error' ) ) {
+        throw new Exception( 'Invalid API key' );
+      }
+
+      if ( $code !== 200 ) {
+        throw new Exception( 'Connection failed: ' . ( $body['error']['message'] ?? "HTTP $code" ) );
+      }
+
+      $availableModels = [];
+      if ( isset( $body['data'] ) && is_array( $body['data'] ) ) {
+        foreach ( array_slice( $body['data'], 0, 10 ) as $model ) {
+          $availableModels[] = $model['id'] ?? 'unknown';
+        }
+      }
 
       return [
-        'models' => array_slice( $modelNames, 0, 10 ),  // Return first 10 models
+        'models' => $availableModels,
         'service' => 'Anthropic'
       ];
     }
     catch ( Exception $e ) {
-      // Check if it's an authentication error
-      $message = $e->getMessage();
-      if ( strpos( $message, 'authentication_error' ) !== false ||
-           strpos( $message, 'invalid x-api-key' ) !== false ||
-           strpos( $message, '401' ) !== false ) {
-        throw new Exception( 'Invalid API key' );
-      }
-      throw new Exception( 'Connection failed: ' . $message );
+      throw new Exception( 'Connection failed: ' . $e->getMessage() );
     }
   }
 

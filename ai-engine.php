@@ -4,7 +4,7 @@
 Plugin Name: AI Engine
 Plugin URI: https://wordpress.org/plugins/ai-engine/
 Description: AI meets WordPress. Your site can now chat, write poetry, solve problems, and maybe make you coffee.
-Version: 3.4.6
+Version: 3.4.7
 Author: Jordy Meow
 Author URI: https://jordymeow.com
 Text Domain: ai-engine
@@ -12,7 +12,7 @@ License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 */
 
-define( 'MWAI_VERSION', '3.4.6' );
+define( 'MWAI_VERSION', '3.4.7' );
 define( 'MWAI_PREFIX', 'mwai' );
 define( 'MWAI_DOMAIN', 'ai-engine' );
 define( 'MWAI_ENTRY', __FILE__ );
@@ -25,9 +25,9 @@ if ( !defined( 'MWAI_TIMEOUT' ) ) {
 if ( !defined( 'MWAI_SSL_VERIFY' ) ) {
   define( 'MWAI_SSL_VERIFY', false );
 }
-define( 'MWAI_FALLBACK_MODEL', 'gpt-5-chat-latest' );
-define( 'MWAI_FALLBACK_MODEL_FAST', 'gpt-5-chat-latest' );
-define( 'MWAI_FALLBACK_MODEL_VISION', 'gpt-5-chat-latest' );
+define( 'MWAI_FALLBACK_MODEL', 'gpt-5.5' );
+define( 'MWAI_FALLBACK_MODEL_FAST', 'gpt-5-mini' );
+define( 'MWAI_FALLBACK_MODEL_VISION', 'gpt-5-mini' );
 define( 'MWAI_FALLBACK_MODEL_JSON', 'gpt-5-mini' );
 define( 'MWAI_FALLBACK_MODEL_IMAGES', 'gpt-image-1.5' );
 define( 'MWAI_FALLBACK_MODEL_AUDIO', 'whisper-1' );

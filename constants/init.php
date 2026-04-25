@@ -28,6 +28,9 @@ define( 'MWAI_CHATBOT_DEFAULT_PARAMS', [
   'windowAnimation' => 'zoom',
   'fullscreen' => false,
   'copyButton' => false,
+  // Default true to preserve the print-to-PDF behavior introduced in 3.4.6
+  // for installs that never opted into the new toggle.
+  'pdfButton' => true,
   'headerSubtitle' => 'Discuss with',
   'localMemory' => true,
   'multiUpload' => false,
@@ -180,18 +183,18 @@ define( 'MWAI_OPTIONS', [
   'mcp_envs' => [],
 
   'ai_fast_default_env' => null,
-  'ai_fast_default_model' => MWAI_FALLBACK_MODEL,
+  'ai_fast_default_model' => MWAI_FALLBACK_MODEL_FAST,
   'ai_embeddings_default_env' => null,
   'ai_embeddings_default_model' => 'text-embedding-3-small',
   'ai_embeddings_default_dimensions' => 1536,
   'ai_vision_default_env' => null,
-  'ai_vision_default_model' => 'gpt-4o-mini',
+  'ai_vision_default_model' => 'gpt-5-mini',
   'ai_images_default_env' => null,
   'ai_images_default_model' => 'gpt-image-1.5',
   'ai_audio_default_env' => null,
   'ai_audio_default_model' => 'whisper-1',
   'ai_json_default_env' => null,
-  'ai_json_default_model' => 'gpt-4o-mini',
+  'ai_json_default_model' => 'gpt-5-mini',
   'embeddings_default_env' => null,
   'embeddings_envs' => [
     [
