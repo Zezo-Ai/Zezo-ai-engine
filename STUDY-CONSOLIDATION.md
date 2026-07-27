@@ -39,8 +39,19 @@ them. Fixed in commit `f93d978e`. This is the proof, not a hypothetical.
   Validated against the real regression: with the 84ecb22b Sonnet 5 fix reverted, FUNCSTRM fails with
   the exact user-reported "each thinking block must contain thinking" error; with the fix, all green.
   Checks retry once so transient provider slowness (OVH) doesn't fail the gate.
-  **Slice three TODO**: RAG-through-chat (needs an embeddings-wired chatbot fixture on ai.nekod.net),
-  image, and PDF-in-chat. The script prints these as SKIP so the coverage gap stays visible.
+  **Slice three, MCP round-trip DONE 2026-07-23**: `node labs/tests/test-smoke.js mcp` (also runs on
+  full runs) drives the real MCP Streamable HTTP transport (bearer self-discovered from settings):
+  MCPINIT handshake, then wp_create_post/wp_update_post_meta with nested-array + unicode meta read
+  back per-key and deep-compared (a double-serialized value is called out explicitly), block-JSON
+  `\u` escapes + shortcode + unicode content through wp_get_post, fixture post force-deleted after.
+  Covers the corruption classes Dave Hilditch's PSA documented (f3a2f4fd/fcda9415, cb806da4,
+  600d86eb; window was 2.8.5 → 3.5.9). Validated against the real bug: with `maybe_serialize()`
+  reintroduced in wp_update_post_meta, METAUPD fails with "DOUBLE-SERIALIZED"; with the fix, all green.
+  **Slice three, RAG-through-chat DONE 2026-07-24**: RAGCHAT drives /simpleChatbotQuery on the
+  smoke-rag fixture bot (wired to the new Internal (WordPress DB) vector env, intern01 on
+  ai.nekod.net) and expects a fact that only exists in the knowledge base. Validated against a
+  simulated dropped-context regression. **Slice three remaining TODO**: image-in-chat and
+  PDF-in-chat; printed as SKIP so the coverage gap stays visible.
 - [ ] **2. Gemini external MCP consumption.** OpenAI (`openai.php:~403`) and Anthropic (`anthropic.php`)
   consume `$query->mcpServers`; the new default Google engine (`google-interactions.php`) does NOT — it
   only wires Google's built-in tools. MCP is the core moat, so the default Google engine being unable to

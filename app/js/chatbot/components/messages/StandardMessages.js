@@ -1,5 +1,5 @@
-// Previous: 3.0.0
-// Current: 3.2.2
+// Previous: 3.2.2
+// Current: 3.6.3
 
 /**
  * StandardMessages Component
@@ -11,6 +11,14 @@
  */
 const { useRef, useEffect } = wp.element;
 import ChatbotReply from '../../ChatbotReply';
+
+// Translation fallback for frontend where wp.i18n isn't available
+const __ = (text) => {
+  if (typeof wp !== 'undefined' && wp.i18n && wp.i18n.__) {
+    return wp.i18n.__(text, 'ai-engine');
+  }
+  return text;
+};
 
 const StandardMessages = ({ messages, conversationRef, onScroll, shortcuts, blocks }) => {
   // Process messages
@@ -24,8 +32,19 @@ const StandardMessages = ({ messages, conversationRef, onScroll, shortcuts, bloc
     );
   });
 
+  // A bot without a start sentence used to open as a dead empty box; give it a
+  // subtle hint instead. Themes can restyle or hide it via .mwai-empty-hint.
+  const isEmpty = messages.length === 0;
+
   return (
     <div ref={conversationRef} className="mwai-conversation" onScroll={onScroll}>
+      {isEmpty && (
+        <div className="mwai-empty-hint" style={{ display: 'flex', alignItems: 'center',
+          justifyContent: 'center', height: '100%', opacity: 0.45, fontSize: '0.95em',
+          textAlign: 'center', padding: 20 }}>
+          {__('Ask me anything!')}
+        </div>
+      )}
       {messageList}
       {shortcuts}
       {blocks}

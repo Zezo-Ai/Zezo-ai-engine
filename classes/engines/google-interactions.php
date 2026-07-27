@@ -88,6 +88,28 @@ class Meow_MWAI_Engines_GoogleInteractions extends Meow_MWAI_Engines_Core {
   }
 
   /**
+   * When a Gemini call fails in a way that usually means the chosen model is
+   * retired, gated to existing users, or otherwise unavailable, append a short
+   * actionable hint. Google keeps listing such models in /models (so they show
+   * up in the dropdown) but rejects them at use time, and the Interactions
+   * endpoint often reports them as an opaque "Internal error", leaving the user
+   * with no clue the model is simply dead. Only fires on model-shaped failures
+   * so it does not add noise to genuine bad requests.
+   */
+  private function model_unavailable_hint( $code, $detail, $model ) {
+    if ( empty( $model ) ) {
+      return '';
+    }
+    $looksModelRelated = $code == 404
+      || ( $code == 500 && stripos( (string) $detail, 'internal error' ) !== false )
+      || preg_match( '/no longer available|not found|is not (available|supported)|does not exist|unsupported model/i', (string) $detail );
+    if ( !$looksModelRelated ) {
+      return '';
+    }
+    return ' (The model "' . $model . '" may have been retired by Google or is not available on your plan. Try a newer Gemini model, such as Gemini 2.5 Flash.)';
+  }
+
+  /**
    * The Interactions API is steps-based: input must be a step_list, not a
    * role-based turn_list. So we emit user_input / model_output / function_result
    * steps (the same step types the API returns).
@@ -102,13 +124,18 @@ class Meow_MWAI_Engines_GoogleInteractions extends Meow_MWAI_Engines_Core {
           if ( !is_string( $value ) ) {
             $value = wp_json_encode( $value );
           }
-          // The Interactions API expects `call_id` (matching the function_call
-          // step's id) and `result` as an array of content blocks, not a string.
+          // `call_id` must match the function_call step's id. `result` is sent as
+          // a plain string (the value is already stringified above). The
+          // content-block-array form ([{type:text,text:...}]) is rejected by
+          // gemini-2.5 and 2.0 as "Multimodal function responses are not
+          // supported for this model", which silently broke function calling on
+          // those (common) models via this default engine; a plain string works
+          // on 2.5, 3 and the -latest models alike (verified live).
           $steps[] = [
             'type' => 'function_result',
             'call_id' => $feedback['request']['toolId'] ?? null,
             'name' => $feedback['request']['name'] ?? '',
-            'result' => [ [ 'type' => 'text', 'text' => $value ] ],
+            'result' => $value,
           ];
         }
       }
@@ -153,7 +180,14 @@ class Meow_MWAI_Engines_GoogleInteractions extends Meow_MWAI_Engines_Core {
         // misleading "value at top-level must be a list". Send a bare object
         // schema when there are no parameters, and drop an empty `required`
         // list otherwise.
-        if ( empty( $function->parameters ) ) {
+        if ( !empty( $function->rawSchema ) ) {
+          // Raw-schema functions (MCP bridge) are already normalized; only
+          // collapse a propertyless schema to the bare object form above.
+          if ( $decl['parameters']['properties'] instanceof stdClass ) {
+            $decl['parameters'] = [ 'type' => 'object' ];
+          }
+        }
+        elseif ( empty( $function->parameters ) ) {
           $decl['parameters'] = [ 'type' => 'object' ];
         }
         elseif ( empty( $decl['parameters']['required'] ) ) {
@@ -319,7 +353,8 @@ class Meow_MWAI_Engines_GoogleInteractions extends Meow_MWAI_Engines_Core {
             ? file_get_contents( $tmpFile ) : wp_remote_retrieve_body( $res );
           $errData = json_decode( $errBody, true );
           $detail = $errData['error']['message'] ?? $errBody;
-          throw new Exception( 'AI Engine (Gemini Interactions) HTTP ' . $code . ': ' . $detail );
+          throw new Exception( 'AI Engine (Gemini Interactions) HTTP ' . $code . ': ' . $detail
+            . $this->model_unavailable_hint( $code, $detail, $query->model ) );
         }
         return $this->build_streaming_reply( $query );
       }
@@ -334,7 +369,8 @@ class Meow_MWAI_Engines_GoogleInteractions extends Meow_MWAI_Engines_Core {
 
       if ( $code < 200 || $code >= 300 ) {
         $detail = $data['error']['message'] ?? $rawBody;
-        throw new Exception( 'AI Engine (Gemini Interactions) HTTP ' . $code . ': ' . $detail );
+        throw new Exception( 'AI Engine (Gemini Interactions) HTTP ' . $code . ': ' . $detail
+          . $this->model_unavailable_hint( $code, $detail, $query->model ) );
       }
 
       return $this->build_reply_from_interaction( $query, $data, $streamCallback );

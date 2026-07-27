@@ -1103,7 +1103,7 @@ class Meow_MWAI_Labs_MCP_Core {
         $q = [
           'search' => '*' . esc_attr( $a['search'] ?? '' ) . '*',
           'role' => $a['role'] ?? '',
-          'number' => max( 1, intval( $a['limit'] ?? 10 ) ),
+          'number' => max( 1, min( 500, intval( $a['limit'] ?? 10 ) ) ),
         ];
         if ( isset( $a['offset'] ) ) {
           $q['offset'] = max( 0, intval( $a['offset'] ) );
@@ -1203,7 +1203,7 @@ class Meow_MWAI_Labs_MCP_Core {
           'post_id' => isset( $a['post_id'] ) ? intval( $a['post_id'] ) : '',
           'status' => $a['status'] ?? 'approve',
           'search' => $a['search'] ?? '',
-          'number' => max( 1, intval( $a['limit'] ?? 10 ) ),
+          'number' => max( 1, min( 500, intval( $a['limit'] ?? 10 ) ) ),
         ];
         // WP 6.9 Notes are comments with comment_type 'note'. Filter by type when
         // asked (unset = all types, preserving prior behavior). Notes track their
@@ -1406,7 +1406,7 @@ class Meow_MWAI_Labs_MCP_Core {
           'post_type' => sanitize_key( $a['post_type'] ?? 'post' ),
           'post_status' => sanitize_key( $a['post_status'] ?? 'publish' ),
           's' => sanitize_text_field( $a['search'] ?? '' ),
-          'posts_per_page' => max( 1, intval( $a['limit'] ?? 10 ) ),
+          'posts_per_page' => max( 1, min( 500, intval( $a['limit'] ?? 10 ) ) ),
         ];
         if ( isset( $a['offset'] ) ) {
           $q['offset'] = max( 0, intval( $a['offset'] ) );
@@ -2202,7 +2202,7 @@ class Meow_MWAI_Labs_MCP_Core {
         $q = [
           'post_type' => 'attachment',
           's' => $a['search'] ?? '',
-          'posts_per_page' => max( 1, intval( $a['limit'] ?? 10 ) ),
+          'posts_per_page' => max( 1, min( 500, intval( $a['limit'] ?? 10 ) ) ),
           'post_status' => 'inherit',
         ];
         if ( isset( $a['author'] ) ) {

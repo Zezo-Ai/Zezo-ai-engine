@@ -132,12 +132,18 @@ class Meow_MWAI_Engines_Core {
       error_log( '[AI Engine Queries] Starting ' . $query_type . ' to ' . ( $query->model ?? 'unknown model' ) );
     }
 
-    // Check if the query is allowed.
+    // Check if the query is allowed. Filters refuse with a string (message) or
+    // a WP_Error whose code carries the machine-readable reason (e.g.
+    // mwai_over_limit), which REST layers use to flag clients.
     $limits = $this->core->get_option( 'limits' );
     $allowed = apply_filters( 'mwai_ai_allowed', true, $query, $limits );
     if ( $allowed !== true ) {
+      if ( is_wp_error( $allowed ) ) {
+        $reason = $allowed->get_error_code() === 'mwai_over_limit' ? 'limits' : null;
+        throw new Meow_MWAI_RefusedException( $allowed->get_error_message(), $reason );
+      }
       $message = is_string( $allowed ) ? $allowed : 'Unauthorized query.';
-      throw new Exception( $message );
+      throw new Meow_MWAI_RefusedException( $message );
     }
 
     // Important as it makes sure everything is consolidated in the query and the engine.
@@ -229,10 +235,8 @@ class Meow_MWAI_Engines_Core {
         if ( !empty( $reply->id ) ) {
           $query->previousResponseId = $reply->id;
         }
-        // Reset the per-turn feedback blocks; they'll be repopulated below from the new reply.
-        if ( method_exists( $query, 'clear_feedback_blocks' ) ) {
-          $query->clear_feedback_blocks();
-        }
+        // The per-turn feedback blocks are reset (or kept, for stateless
+        // providers) further down, right before they are repopulated.
       }
 
       // Determine whether every function call in this turn is "static" (no AI
@@ -262,17 +266,22 @@ class Meow_MWAI_Engines_Core {
         $all_static = false;
       }
 
-      // Validate that all function calls have proper function definitions
-      foreach ( $reply->needFeedbacks as $needFeedback ) {
+      // Validate that all function calls have proper function definitions.
+      // An unknown name is not fatal: models sometimes hallucinate a variant
+      // (e.g. a "{MCP server}_{function}" mashup when MCP servers and local
+      // functions are mixed). The error is returned to the AI as that call's
+      // result so it can correct itself, instead of failing the whole reply.
+      foreach ( $reply->needFeedbacks as $idx => $needFeedback ) {
         if ( !isset( $needFeedback['function'] ) ) {
           $functionName = $needFeedback['name'] ?? 'unknown';
           $availableFunctions = array_map( function ( $f ) { return $f->name; }, $query->functions );
-
-          throw new Exception( sprintf(
-            "Function '%s' not found in query functions. Available functions: %s",
+          $errorMessage = sprintf(
+            "Error: the function '%s' does not exist. The available functions are: %s.",
             $functionName,
             implode( ', ', $availableFunctions )
-          ) );
+          );
+          Meow_MWAI_Logging::warn( $errorMessage );
+          $reply->needFeedbacks[$idx]['unknownFunction'] = $errorMessage;
         }
       }
 
@@ -340,6 +349,22 @@ class Meow_MWAI_Engines_Core {
           ];
         }
 
+        // Unknown function: skip execution and hand the error back to the AI
+        // as this call's result, so it can retry with a valid name.
+        if ( isset( $needFeedback['unknownFunction'] ) ) {
+          $feedback_blocks[$rawMessageKey]['feedbacks'][] = [
+            'request' => $needFeedback,
+            'reply' => [ 'value' => $needFeedback['unknownFunction'] ]
+          ];
+          $reply->add_tool_call(
+            $needFeedback['name'] ?? 'unknown',
+            $needFeedback['arguments'] ?? [],
+            $needFeedback['unknownFunction'],
+            false
+          );
+          continue;
+        }
+
         // Allow modifying function call arguments before execution
         $needFeedback['arguments'] = apply_filters(
           'mwai_function_call_params',
@@ -348,8 +373,30 @@ class Meow_MWAI_Engines_Core {
           $reply
         );
 
-        // Get the value related to this feedback (usually, a function call)
-        $value = apply_filters( 'mwai_ai_feedback', null, $needFeedback, $reply );
+        // Get the value related to this feedback (usually, a function call).
+        // A function that throws must not kill the whole turn: feed the error
+        // back to the model as this function's result, so one failing tool does
+        // not lose the results that succeeded and the model can recover (report
+        // the failure, retry, or answer from what it has). Mirrors the
+        // Workspace/MCP path, which already returns tool crashes as a result.
+        // The two control-flow exceptions keep propagating: the Workspace throws
+        // ApprovalRequiredException here to pause the turn for user approval, and
+        // RefusedException carries a user-facing refusal.
+        $callSucceeded = true;
+        try {
+          $value = apply_filters( 'mwai_ai_feedback', null, $needFeedback, $reply );
+        }
+        catch ( Meow_MWAI_ApprovalRequiredException $e ) {
+          throw $e;
+        }
+        catch ( Meow_MWAI_RefusedException $e ) {
+          throw $e;
+        }
+        catch ( Exception $e ) {
+          Meow_MWAI_Logging::error( "The function '{$needFeedback['name']}' threw an exception: " . $e->getMessage() );
+          $value = "The function '{$needFeedback['name']}' failed with an error: " . $e->getMessage();
+          $callSucceeded = false;
+        }
 
         if ( $value === null ) {
           // Check if the function handler exists
@@ -393,6 +440,8 @@ class Meow_MWAI_Engines_Core {
           }
         }
 
+        $reply->add_tool_call( $needFeedback['name'], $needFeedback['arguments'], $value, $callSucceeded );
+
         // Add the feedback information to the appropriate feedback block
         $feedback_blocks[$rawMessageKey]['feedbacks'][] = [
           'request' => $needFeedback,
@@ -400,7 +449,20 @@ class Meow_MWAI_Engines_Core {
         ];
       }
 
-      $query->clear_feedback_blocks();
+      // Stateless providers (Anthropic, Chat Completions, classic Gemini)
+      // replay the whole tool exchange from the blocks on every request, so on
+      // recursion the earlier rounds must be KEPT and the new one appended.
+      // Resetting them every round made the model forget every result of the
+      // turn, re-issue the same calls, and trip the loop detector. Stateful
+      // providers (OpenAI Responses, Google Interactions) hold the prior
+      // rounds server-side via previousResponseId and must only receive the
+      // new results; Assistants runs also start fresh.
+      $keepBlocks = $query instanceof Meow_MWAI_Query_Feedback &&
+        isset( $query->blocks ) &&
+        !( !empty( $reply->id ) && $this->core->responseIdManager->is_stateful_conversation_id( $reply->id ) );
+      if ( !$keepBlocks ) {
+        $query->clear_feedback_blocks();
+      }
       foreach ( $feedback_blocks as $feedback_block ) {
         $query->add_feedback_block( $feedback_block );
       }
@@ -422,8 +484,12 @@ class Meow_MWAI_Engines_Core {
         return $reply;
       }
 
-      // Run the feedback query
+      // Run the feedback query. The recursion returns a brand new reply (the final,
+      // tool-free round), so the calls executed above would be lost with the old one.
+      // Prepend them to keep the whole turn's chain in chronological order.
+      $executedToolCalls = $reply->toolCalls;
       $reply = $this->run( $query, $streamCallback, $maxDepth - 1 );
+      $reply->toolCalls = array_merge( $executedToolCalls, $reply->toolCalls );
     }
 
     return $reply;
@@ -598,8 +664,12 @@ class Meow_MWAI_Engines_Core {
   }
 
   protected function init_debug_mode( $query ) {
-    // Check if server debug mode or event logs are enabled in settings
-    $this->currentDebugMode = ( $this->core->get_option( 'module_devtools' ) && $this->core->get_option( 'server_debug_mode' ) ) || $this->core->get_option( 'event_logs' );
+    // Check if server debug mode or event logs are enabled in settings.
+    // The Workspace always gets rich stream events: it renders a live
+    // activity trail (function/MCP calls) from them.
+    $this->currentDebugMode = ( $this->core->get_option( 'module_devtools' ) && $this->core->get_option( 'server_debug_mode' ) ) ||
+      $this->core->get_option( 'event_logs' ) ||
+      ( isset( $query->scope ) && $query->scope === 'workspace' );
     $this->currentQuery = $query;
   }
 

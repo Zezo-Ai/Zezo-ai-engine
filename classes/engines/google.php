@@ -835,6 +835,8 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
   private function format_model_name( $model_id ) {
     // Special cases for specific models that need manual handling
     $special_names = [
+      'nano-banana-pro-preview' => 'Nano Banana Pro',
+      'gemini-3.1-pro-preview-customtools' => 'Gemini 3.1 Pro (Custom Tools)',
       'gemini-live-2.5-flash-preview' => 'Gemini 2.5 Flash Live',
       'gemini-2.0-flash-live-001' => 'Gemini 2.0 Flash Live',
       'gemini-2.5-flash-native-audio-preview-12-2025' => 'Gemini 2.5 Flash Audio (12-2025)',
@@ -1112,6 +1114,12 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
       else if ( strpos( $model['name'], 'veo' ) !== false ) {
         $family = 'veo';
       }
+      else if ( strpos( $model['name'], 'nano-banana' ) !== false ) {
+        // Google ships its image models under the "Nano Banana" codename too
+        // (nano-banana-pro-preview). The id carries no "gemini", so the check below
+        // used to drop them silently even though they are first-class image models.
+        $family = 'gemini';
+      }
       else if ( strpos( $model['name'], 'gemini' ) === false ) {
         // Skip models that aren't gemini, imagen, or veo
         continue;
@@ -1154,19 +1162,19 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
         }
 
         // Vision capabilities - all 3.x, 2.5, 2.0, and 1.5 models support vision and files
-        if ( preg_match( '/gemini-(3|2\.5|2\.0|1\.5)/', $model_id ) ) {
+        if ( preg_match( '/gemini-(3|2\.5|2\.0|1\.5|omni)|nano-banana/', $model_id ) ) {
           $tags[] = 'vision';
           $tags[] = 'files'; // All vision models support PDFs/documents
           $features[] = 'vision';
         }
 
         // Web search capabilities - Gemini 3.x, 2.5, and 1.5 Pro models
-        if ( preg_match( '/gemini-(3|2\.5|1\.5-pro)/', $model_id ) ) {
+        if ( preg_match( '/gemini-(3|2\.5|1\.5-pro|omni)/', $model_id ) ) {
           $tools[] = 'web_search';
         }
 
         // Google Maps grounding - Gemini 3.x and 2.5 models
-        if ( preg_match( '/gemini-(3|2\.5)/', $model_id ) ) {
+        if ( preg_match( '/gemini-(3|2\.5|omni)/', $model_id ) ) {
           $tools[] = 'google_maps';
         }
 
@@ -1175,7 +1183,7 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
         // siblings without the suffix (e.g. gemini-3-pro-image), plus the older
         // *-image-generation ids. A narrow flash-image|image-preview match misses
         // gemini-3-pro-image and would break whenever Google drops -preview.
-        if ( preg_match( '/(flash|pro)-image|image-(preview|generation)/', $model_id ) ) {
+        if ( preg_match( '/-image(-preview)?$|image-(preview|generation)|nano-banana/', $model_id ) ) {
           $tags[] = 'image';
           $tags[] = 'image-generation';
           $features[] = 'image-generation';
@@ -1216,7 +1224,7 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
         }
 
         // Thinking capabilities for Gemini 2.5 models
-        if ( preg_match( '/gemini-2\.5/', $model_id ) && !in_array( 'embedding', $tags ) ) {
+        if ( preg_match( '/gemini-(2\.5|3)/', $model_id ) && !in_array( 'embedding', $tags ) ) {
           $tools[] = 'thinking';
           $tags[] = 'thinking';
         }
@@ -1576,6 +1584,22 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
       // Fallback to string comparison
       return strcasecmp( $model_a, $model_b );
     } );
+
+    // Google ships preview and GA variants of the same model (gemini-3-pro-image and
+    // gemini-3-pro-image-preview), and format_model_name() strips the suffix from both.
+    // That left several identical entries in the model dropdown with no way to tell
+    // which was which, so disambiguate the preview one after the fact.
+    $name_counts = [];
+    foreach ( $models as $model ) {
+      $name = $model['name'];
+      $name_counts[$name] = ( $name_counts[$name] ?? 0 ) + 1;
+    }
+    foreach ( $models as &$model ) {
+      if ( ( $name_counts[$model['name']] ?? 0 ) > 1 && strpos( $model['model'], '-preview' ) !== false ) {
+        $model['name'] .= ' (Preview)';
+      }
+    }
+    unset( $model );
 
     return $models;
   }

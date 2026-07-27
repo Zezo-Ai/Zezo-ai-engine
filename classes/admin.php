@@ -111,6 +111,12 @@ class Meow_MWAI_Admin extends MeowKit_MWAI_Admin {
     $content_generator = isset( $admin_bar['content_generator'] ) && $admin_bar['content_generator'];
     $images_generator = isset( $admin_bar['images_generator'] ) && $admin_bar['images_generator'];
     $videos_generator = isset( $admin_bar['videos_generator'] ) && $admin_bar['videos_generator'];
+    // Workspace is checked by default (a missing key counts as enabled), but
+    // only appears when the module is on and the Pro class runs it.
+    $workspace = ( !isset( $admin_bar['workspace'] ) || $admin_bar['workspace'] ) &&
+      $this->core->get_option( 'module_workspace' ) &&
+      class_exists( 'Meow_MWAI_Modules_Workspace' ) &&
+      current_user_can( 'manage_options' );
 
     if ( $settings ) {
       $wp_admin_bar->add_node( [
@@ -162,6 +168,17 @@ class Meow_MWAI_Admin extends MeowKit_MWAI_Admin {
         'title' => MWAI_IMG_WAND_HTML . __( 'Playground', 'ai-engine' ),
         'href' => admin_url( 'tools.php?page=mwai_dashboard' ),
         'meta' => [ 'class' => 'mwai-playground' ],
+      ] );
+    }
+
+    if ( $workspace ) {
+      $nyao = "<img style='height: 20px; margin-bottom: -5px; margin-right: 8px;' src='" .
+        MWAI_URL . "images/chat-nyao-1.svg' alt='Workspace' />";
+      $wp_admin_bar->add_node( [
+        'id' => 'mwai-workspace',
+        'title' => $nyao . __( 'Workspace', 'ai-engine' ),
+        'href' => admin_url( 'admin.php?page=mwai_workspace' ),
+        'meta' => [ 'class' => 'mwai-workspace' ],
       ] );
     }
   }

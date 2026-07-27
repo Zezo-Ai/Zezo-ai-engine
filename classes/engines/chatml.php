@@ -28,6 +28,7 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
   protected $streamAnnotations = [];
   protected $streamImageIds = [];
   protected $streamThinking = null;  // For reasoning/thinking content
+  protected $streamThinkTag = 0;     // Inside an inline <think> block (Qwen-style models)
 
   protected $streamInTokens = null;
   protected $streamOutTokens = null;
@@ -46,6 +47,7 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
     $this->streamToolCalls = [];
     $this->streamLastMessage = null;
     $this->streamThinking = null;
+    $this->streamThinkTag = 0;
     $this->streamInTokens = null;
     $this->streamOutTokens = null;
     $this->inModel = null;
@@ -576,6 +578,15 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
       }
     }
 
+    // Providers send no-op frames (keepalive, ping) purely to hold the SSE connection
+    // open through proxies. They carry no content and there is nothing to handle, so
+    // return before the "unhandled streaming JSON structure" log at the end of this
+    // method reports them as a parsing problem. They are expected traffic, not errors.
+    $eventType = $json['type'] ?? null;
+    if ( in_array( $eventType, [ 'keepalive', 'ping' ], true ) ) {
+      return null;
+    }
+
     $object = $json['object'] ?? null;
 
     if ( $object === 'thread.run' ) {
@@ -677,6 +688,11 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
             $this->streamImageIds[] = $fileId;
             break;
           case 'function_call':
+            // TODO: Re-evaluate after 2027-01-26. This is the deprecated OpenAI
+            // "function_call" streaming format, superseded by "tool_calls". It decodes
+            // each delta and replaces (instead of concatenating like the tool_calls
+            // path), so a provider that streams fragmented args here would lose them.
+            // Confirm no supported provider still uses this format, then remove it.
             if ( empty( $this->streamFunctionCall ) ) {
               $this->streamFunctionCall = [ 'name' => '', 'arguments' => [] ];
             }
@@ -725,6 +741,8 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
         $content = $json['choices'][0]['delta']['content'];
       }
       else if ( isset( $json['choices'][0]['delta']['function_call'] ) ) {
+        // TODO: Re-evaluate after 2027-01-26. Deprecated "function_call" stream path
+        // (same deprecation as the object-based case above); remove once no provider uses it.
         $handledCondition = true;
         if ( empty( $this->streamFunctionCall ) ) {
           $this->streamFunctionCall = [ 'name' => '', 'arguments' => [] ];
@@ -835,7 +853,74 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
       $content = null;
     }
 
-    return ( $content === '0' || !empty( $content ) ) ? $content : null;
+    if ( $content !== '0' && empty( $content ) ) {
+      return null;
+    }
+    if ( is_string( $content ) ) {
+      $content = $this->filter_inline_thinking( $content );
+      if ( $content === '' ) {
+        return null;
+      }
+    }
+    return $content;
+  }
+
+  /**
+  * Qwen-style open models emit their reasoning INLINE in the content as
+  * <think>...</think>. Route it to streamThinking (with a single thinking
+  * event per block) so the visible reply only contains the actual answer.
+  */
+  protected function filter_inline_thinking( $content ) {
+    if ( $this->streamThinkTag === 0 &&
+         strpos( $content, '<think>' ) === false && strpos( $content, '</think>' ) === false ) {
+      return $content;
+    }
+    $out = '';
+    $thought = '';
+    $remaining = $content;
+    while ( $remaining !== '' ) {
+      if ( $this->streamThinkTag === 0 ) {
+        $pos = strpos( $remaining, '<think>' );
+        if ( $pos === false ) {
+          $out .= $remaining;
+          break;
+        }
+        $out .= substr( $remaining, 0, $pos );
+        $remaining = substr( $remaining, $pos + 7 );
+        $this->streamThinkTag = 1;
+        if ( $this->currentDebugMode && !empty( $this->streamCallback ) ) {
+          call_user_func( $this->streamCallback, Meow_MWAI_Event::thinking( 'Thinking...' ) );
+        }
+      }
+      else {
+        $pos = strpos( $remaining, '</think>' );
+        if ( $pos === false ) {
+          $thought .= $remaining;
+          break;
+        }
+        $thought .= substr( $remaining, 0, $pos );
+        // The answer usually follows the block after blank lines.
+        $remaining = ltrim( substr( $remaining, $pos + 8 ), "\n" );
+        $this->streamThinkTag = 0;
+      }
+    }
+    if ( $thought !== '' ) {
+      $this->streamThinking = ( $this->streamThinking ?? '' ) . $thought;
+    }
+    return $out;
+  }
+
+  /**
+  * Same cleanup for non-streaming replies: closed blocks are removed, and a
+  * trailing unclosed block (the model spent its whole budget thinking) too.
+  */
+  public static function strip_inline_thinking( $text ) {
+    if ( !is_string( $text ) || strpos( $text, '<think>' ) === false ) {
+      return $text;
+    }
+    $text = preg_replace( '/<think>.*?<\/think>/s', '', $text );
+    $text = preg_replace( '/<think>.*$/s', '', $text );
+    return ltrim( $text );
   }
 
   public function run( $query, $streamCallback = null, $maxDepth = 5 ) {
@@ -1209,6 +1294,14 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
           if ( !is_null( $error ) ) {
             throw new Exception( $error );
           }
+          // A stream that ends without a single chunk (no id, no content, no
+          // tool call, no thinking) is a provider failure, not a reply. OVH
+          // answers 200 with a lone [DONE] when it rejects a parameter, which
+          // used to be saved as a silent empty message.
+          if ( empty( $this->streamToolCalls ) && empty( $this->streamFunctionCall ) &&
+               empty( $this->streamThinking ) && is_null( $this->inId ) ) {
+            throw new Exception( 'The AI service closed the stream without sending a reply. A parameter (often Max Tokens) may exceed what this model supports.' );
+          }
         }
         $returned_id = $this->inId;
         $returned_model = $this->inModel ? $this->inModel : $query->model;
@@ -1326,6 +1419,14 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
         $returned_price = $usage['total_cost'] ?? $usage['cost'] ?? null;
         $returned_choices = $data['choices'];
         $returned_choices = $this->finalize_choices( $returned_choices, $data, $query );
+
+        // Strip inline <think> reasoning (Qwen-style models) from the reply.
+        foreach ( $returned_choices as &$choice ) {
+          if ( isset( $choice['message']['content'] ) && is_string( $choice['message']['content'] ) ) {
+            $choice['message']['content'] = self::strip_inline_thinking( $choice['message']['content'] );
+          }
+        }
+        unset( $choice );
       }
 
       // Set the results.

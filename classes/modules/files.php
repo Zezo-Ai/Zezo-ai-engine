@@ -236,7 +236,7 @@ class Meow_MWAI_Modules_Files {
   public function save_temp_image_from_b64(
     string $b64_json,
     string $purpose = 'generated',
-    int $ttl = HOUR_IN_SECONDS,
+    $ttl = HOUR_IN_SECONDS,
     string $target = 'uploads',
     array $metadata = []
   ) {
@@ -574,8 +574,12 @@ class Meow_MWAI_Modules_Files {
     $sql = $selectStar ? "SELECT * FROM $this->table_files WHERE 1=1" : "SELECT COUNT(*) FROM $this->table_files WHERE 1=1";
     $params = [];
 
-    // Based on the old "search" function
-    $actualUserId = $this->core->get_user_id();
+    // Ownership check. Compare against the EFFECTIVE user id: guests own their
+    // files under a 'session_<id>' string (get_effective_user_id), while
+    // get_user_id() returns null for them. Using get_user_id() here made every
+    // guest request fail this check ('session_x' !== null) and throw, 500-ing a
+    // guest listing its own files.
+    $actualUserId = $this->get_effective_user_id();
     $canAdmin = $this->core->can_access_settings();
     if ( $userId !== $actualUserId ) {
       if ( !$canAdmin ) {
@@ -583,7 +587,9 @@ class Meow_MWAI_Modules_Files {
       }
     }
     if ( $userId ) {
-      $sql .= ' AND userId = %d';
+      // userId is VARCHAR (an int for members, 'session_<id>' for guests), so
+      // bind as a string. %d cast a guest id to 0 and never matched their files.
+      $sql .= ' AND userId = %s';
       $params[] = $userId;
     }
     if ( $purpose ) {

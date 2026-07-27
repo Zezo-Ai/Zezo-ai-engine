@@ -84,14 +84,16 @@ define( 'MWAI_LIMITS', [
     'creditType' => 'queries',
     'timeFrame' => 'day',
     'isAbsolute' => false,
-    'overLimitMessage' => 'You have reached the limit (check the Insights Tab > Limits > Guests).',
+    // Shown to anonymous visitors: keep it visitor-friendly, no admin jargon.
+    // Admins can customize it under Insights > Limits > Guests.
+    'overLimitMessage' => 'You have reached the usage limit for now. Please come back later.',
   ],
   'users' => [
     'credits' => 10,
     'creditType' => 'price',
     'timeFrame' => 'month',
     'isAbsolute' => false,
-    'overLimitMessage' => 'You have reached the limit (check the Insights Tab > Limits > Users).',
+    'overLimitMessage' => 'You have reached your usage limit for now. Please come back later.',
     'ignoredUsers' => 'administrator,editor',
   ],
   'system' => [
@@ -115,6 +117,14 @@ define( 'MWAI_OPTIONS', [
   'module_library_search' => false,
   'library_search_env_id' => null,
   'module_forms' => false,
+  'module_workspace' => false,
+  // Which features the Workspace composer offers (admin-level; all on by default).
+  'workspace_image' => true,
+  'workspace_web_search' => true,
+  'workspace_wp_tools' => true,
+  'workspace_mcp' => true,
+  'workspace_functions' => true,
+  'workspace_knowledge' => true,
   'forms_editor' => true,
   'module_blocks' => false,
   'module_assistant' => true,
@@ -194,6 +204,12 @@ define( 'MWAI_OPTIONS', [
   'ai_json_default_model' => 'gpt-5-mini',
   'embeddings_default_env' => null,
   'embeddings_envs' => [
+    // First env becomes the default: Internal needs no account, so knowledge
+    // works out of the box on fresh installs.
+    [
+      'name' => 'Internal (WordPress DB)',
+      'type' => 'internal',
+    ],
     [
       'name' => 'OpenAI Vector Store',
       'type' => 'openai-vector-store',

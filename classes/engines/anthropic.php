@@ -403,6 +403,33 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
     return $item;
   }
 
+  /**
+  * Anthropic's server-side web search. Claude runs the searches itself and returns
+  * cited results, so this only has to declare the tool alongside any client functions.
+  *
+  * Pinned to web_search_20250305 on purpose: from web_search_20260209 the tool defaults
+  * to running through code execution (allowed_callers), which 400s on models without
+  * programmatic tool calling and is unavailable on some clouds. The basic version works
+  * everywhere, which matters for a plugin that cannot know the user's model or host.
+  * https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool
+  */
+  private function maybe_add_web_search( &$body, $query ) {
+    if ( empty( $query->tools ) || !is_array( $query->tools ) ) {
+      return;
+    }
+    if ( !in_array( 'web_search', $query->tools, true ) ) {
+      return;
+    }
+    if ( !isset( $body['tools'] ) ) {
+      $body['tools'] = [];
+    }
+    $body['tools'][] = [
+      'type' => 'web_search_20250305',
+      'name' => 'web_search',
+      'max_uses' => 5,
+    ];
+  }
+
   protected function build_body( $query, $streamCallback = null, $extra = null ) {
     if ( $query instanceof Meow_MWAI_Query_Feedback ) {
       $body = [
@@ -429,15 +456,12 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
 
       // Build the messages. Include the full prior conversation history, otherwise
       // Claude loses all earlier context on any turn that triggers a function call.
-      // $query->messages holds that history (Anthropic-formatted, same as the normal
-      // path) and, via Meow_MWAI_Query_Feedback, ends with the assistant's tool_call
-      // message. The blocks loop below replays that assistant message with the
-      // tool_use input fix-ups, so drop the trailing assistant entry here to avoid
-      // duplicating it. Fall back to the single message when there is no history.
+      // $query->messages holds ONLY the prior history: the current user message
+      // travels separately ($query->message), and the assistant's tool_call
+      // message is replayed by the blocks loop below. Never pop a trailing
+      // assistant entry here: it is genuine history (its removal made Claude
+      // re-answer the PREVIOUS question with the previous tool parameters).
       $history = is_array( $query->messages ) ? $query->messages : [];
-      if ( !empty( $history ) && ( end( $history )['role'] ?? '' ) === 'assistant' ) {
-        array_pop( $history );
-      }
       // Anthropic requires the first message to have the 'user' role.
       if ( !empty( $history ) && ( $history[0]['role'] ?? '' ) !== 'user' ) {
         array_shift( $history );
@@ -448,6 +472,18 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
       else {
         foreach ( $history as $historyMessage ) {
           $body['messages'][] = $historyMessage;
+        }
+        // The user message that triggered this turn is NOT part of the stored
+        // history (it travels separately as $query->message). Without it,
+        // Claude reads the PREVIOUS question as the current one and "corrects"
+        // the tool call with the previous parameters (e.g. re-searching the
+        // old keyword after a correct new-keyword search).
+        $lastHistory = end( $history );
+        $lastIsSameUserMessage = ( $lastHistory['role'] ?? '' ) === 'user' &&
+          is_string( $lastHistory['content'] ?? null ) &&
+          $lastHistory['content'] === $query->message;
+        if ( !empty( $query->message ) && !$lastIsSameUserMessage ) {
+          $body['messages'][] = [ 'role' => 'user', 'content' => $query->message ];
         }
       }
 
@@ -600,6 +636,8 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
         }
       }
 
+      $this->maybe_add_web_search( $body, $query );
+
       // To avoid errors with Anthropic's API, we need to replace empty arrays with empty objects
       // Note: We've already handled tool_use inputs above, so no need to process them again
       return $body;
@@ -732,6 +770,8 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
         $body['system'][] = [ 'type' => 'text', 'text' => $code_exec_hint ];
         Meow_MWAI_Logging::log( 'Anthropic: Added code_execution tool to request' );
       }
+
+      $this->maybe_add_web_search( $body, $query );
 
       return $body;
     }
@@ -1073,27 +1113,55 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
     }
 
     try {
-      $res = $this->run_query( $url, $options, $streamCallback );
       $reply = new Meow_MWAI_Reply( $query );
       $returned_id = null;
       $returned_model = null;
       $returned_choices = [];
 
-      // Streaming Mode
-      if ( $isStreaming ) {
-        $returned_id = $this->inId;
-        $returned_model = $this->inModel ? $this->inModel : $query->model;
-        if ( !is_null( $this->streamInTokens && !is_null( $this->streamOutTokens ) ) ) {
-          $returned_in_tokens = $this->streamInTokens;
-          $returned_out_tokens = $this->streamOutTokens;
-        }
-        $data = $this->streamBlocks;
+      // The MCP connector can pause a long turn (stop_reason: pause_turn);
+      // the conversation must be sent back with the partial assistant content
+      // so Claude continues where it left off. Capped to avoid infinite loops.
+      $accumulated_content = [];
+      $continuations = 0;
 
-        // Clean up streaming data as well
+      while ( true ) {
+        $res = $this->run_query( $url, $options, $streamCallback );
+
+        // Streaming Mode
+        if ( $isStreaming ) {
+          $returned_id = $this->inId;
+          $returned_model = $this->inModel ? $this->inModel : $query->model;
+          if ( !is_null( $this->streamInTokens && !is_null( $this->streamOutTokens ) ) ) {
+            $returned_in_tokens = ( $returned_in_tokens ?? 0 ) + (int) $this->streamInTokens;
+            $returned_out_tokens = ( $returned_out_tokens ?? 0 ) + (int) $this->streamOutTokens;
+          }
+          $data = $this->streamBlocks;
+        }
+        // Standard Mode
+        else {
+          $data = $res['data'];
+          $returned_id = $data['id'];
+          $returned_model = $data['model'];
+          $usage = $data['usage'];
+          if ( !empty( $usage ) ) {
+            $returned_in_tokens = ( $returned_in_tokens ?? 0 ) + (int) ( $usage['input_tokens'] ?? 0 );
+            $returned_out_tokens = ( $returned_out_tokens ?? 0 ) + (int) ( $usage['output_tokens'] ?? 0 );
+          }
+        }
+
+        // Clean up tool_use/mcp_tool_use inputs in the raw data BEFORE it gets
+        // stored or resent (Anthropic requires input to be an object, and an
+        // empty {} decodes to [] in PHP).
         if ( isset( $data['content'] ) && is_array( $data['content'] ) ) {
           foreach ( $data['content'] as &$content ) {
-            if ( $content['type'] === 'tool_use' && isset( $content['input'] ) ) {
-              if ( empty( $content['input'] ) || ( is_array( $content['input'] ) && count( $content['input'] ) === 0 ) ) {
+            if ( in_array( $content['type'] ?? '', [ 'tool_use', 'mcp_tool_use' ], true ) ) {
+              // Streamed blocks can end with input null (no args), an empty
+              // array (decoded {}), or a JSON string (accumulated deltas).
+              if ( isset( $content['input'] ) && is_string( $content['input'] ) && $content['input'] !== '' ) {
+                $decoded = json_decode( $content['input'], true );
+                $content['input'] = is_array( $decoded ) && count( $decoded ) ? $decoded : new stdClass();
+              }
+              if ( empty( $content['input'] ) ) {
                 $content['input'] = new stdClass();
               }
             }
@@ -1101,33 +1169,31 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
           unset( $content );
         }
 
-        $returned_choices = $this->create_choices( $this->streamBlocks );
-      }
-      // Standard Mode
-      else {
-        $data = $res['data'];
+        $accumulated_content = array_merge( $accumulated_content, $data['content'] ?? [] );
 
-        // Clean up tool_use inputs in the raw data BEFORE it gets stored
-        if ( isset( $data['content'] ) && is_array( $data['content'] ) ) {
-          foreach ( $data['content'] as &$content ) {
-            if ( $content['type'] === 'tool_use' && isset( $content['input'] ) ) {
-              if ( empty( $content['input'] ) || ( is_array( $content['input'] ) && count( $content['input'] ) === 0 ) ) {
-                $content['input'] = new stdClass();
-              }
-            }
-          }
-          unset( $content );
+        // A turn needs continuing when it is explicitly paused (pause_turn), or
+        // when a streamed MCP turn is cut without any stop_reason while tool
+        // calls are still unresolved (Anthropic drops the stream while its MCP
+        // client executes slow tools). Resending the partial assistant content
+        // either resumes the turn, or surfaces Anthropic's real MCP error.
+        $turnContent = $data['content'] ?? [];
+        $lastBlockType = count( $turnContent ) ? ( $turnContent[count( $turnContent ) - 1]['type'] ?? '' ) : '';
+        $unresolvedMcp = empty( $data['stop_reason'] ) && $lastBlockType === 'mcp_tool_use';
+        if ( ( ( $data['stop_reason'] ?? '' ) !== 'pause_turn' && !$unresolvedMcp ) || $continuations >= 5 ) {
+          break;
         }
 
-        $returned_id = $data['id'];
-        $returned_model = $data['model'];
-        $usage = $data['usage'];
-        if ( !empty( $usage ) ) {
-          $returned_in_tokens = isset( $usage['input_tokens'] ) ? $usage['input_tokens'] : null;
-          $returned_out_tokens = isset( $usage['output_tokens'] ) ? $usage['output_tokens'] : null;
+        $continuations++;
+        Meow_MWAI_Logging::log( 'Anthropic: Turn paused (' . ( $data['stop_reason'] ?? 'stream cut on MCP' ) . '), continuing (' . $continuations . ').' );
+        $body['messages'][] = [ 'role' => 'assistant', 'content' => $data['content'] ];
+        $options = $this->build_options( $headers, $body );
+        if ( $isStreaming ) {
+          $this->reset_stream();
         }
-        $returned_choices = $this->create_choices( $data );
       }
+
+      $data['content'] = $accumulated_content;
+      $returned_choices = $this->create_choices( $data );
 
       $reply->set_choices( $returned_choices, $data );
       if ( !empty( $returned_id ) ) {

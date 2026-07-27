@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.6.2
+Stable tag: 3.6.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -269,6 +269,24 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.6.3 (2026/07/27) =
+* Add: Workspace: a full-screen chat surface in wp-admin, with a model picker across all your environments, conversation history, folders, a prompt library, per-user themes, and edit-and-branch on any message. Available in the Pro, coming later in the Free.
+* Add: The Workspace can generate and edit images, search the web with each provider's own search tool (OpenAI, Anthropic, Google, OpenRouter), and work on the site itself through the MCP tools, with an approval dialog before any site-changing tool runs.
+* Add: QR-code pairing for the Workspace mobile companion app, with a revocable Application Password.
+* Add: Internal (WordPress DB) vector environment that stores embeddings locally, now the default for new installs.
+* Add: Discussions now show the tool calls and their parameters alongside the embeddings usage, and can be searched server-side by content and title.
+* Add: Claude Opus 5.
+* Fix: Public chat and form endpoints no longer trust client-supplied models, environments, instructions or messages, and internal errors are hidden from visitors; the stateful-response restore is now owner-scoped, so another user's chat ID can no longer resume their conversation.
+* Fix: Content-aware chatbots no longer inject a post the visitor cannot read, so a client-supplied context ID can no longer leak draft or private content.
+* Fix: Chatbot error and notice messages are sanitized before being rendered as HTML, and configuration errors are shown to editors only instead of being printed publicly.
+* Fix: Function calling is more reliable: Claude no longer re-calls tools with the previous message's parameters, multi-round calls on stateless providers keep their feedback blocks instead of clearing them each round, and the Gemini 2.x models work again.
+* Fix: Google model names and capability detection, so image, thinking and web-search models are recognised and preview variants are no longer ambiguous.
+* Fix: OVH replies arriving empty, caused by an oversized max_tokens and a hijacked catalog fetch.
+* Fix: Embeddings re-sync destroying a vector when the new content comes back empty, and guest file listing crashing with a 500.
+* Fix: The usage-limit lock never firing on streaming chatbots, and the Discussions table spinning forever when opened in a background tab.
+* Update: MCP server hardening: a failing tool now returns a readable error instead of killing the server for the client, and the tools list is capped at 500 results.
+* Update: Settings Reset now asks you to type the site host and says plainly that it deletes the API keys, environments, chatbots and themes; more native browser dialogs were replaced with NekoModal across Discussions, Query Logs, Knowledge, Templates and Limits.
 
 = 3.6.2 (2026/07/16) =
 * Fix: Fixed block editor paragraph spacing broken by the AI Copilot handler wrapper.

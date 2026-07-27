@@ -81,6 +81,20 @@ class Meow_MWAI_Engines_OVH extends Meow_MWAI_Engines_ChatML {
       unset( $body['max_completion_tokens'] );
     }
 
+    // OVH does not error when max_tokens cannot fit: it returns 200 with an
+    // instantly-terminated stream (a lone [DONE]), which looked like the AI
+    // answering nothing. Its models also share ONE window between prompt and
+    // completion (max output == context), so any max_tokens at or above the
+    // model's cap can never fit once the prompt is counted. In that case drop
+    // the parameter and let the endpoint default to the remaining context.
+    if ( !empty( $body['max_tokens'] ) ) {
+      $modelInfo = $this->retrieve_model_info( $query->model );
+      if ( !empty( $modelInfo['maxCompletionTokens'] ) &&
+           (int) $body['max_tokens'] >= (int) $modelInfo['maxCompletionTokens'] ) {
+        unset( $body['max_tokens'] );
+      }
+    }
+
     // OVH supports stream_options for accurate token usage in streaming
     if ( !empty( $streamCallback ) && !isset( $body['stream_options'] ) ) {
       $body['stream_options'] = [
@@ -179,8 +193,29 @@ class Meow_MWAI_Engines_OVH extends Meow_MWAI_Engines_ChatML {
    * Retrieve the models from the OVH OpenRouter-compatible catalog.
    */
   public function retrieve_models() {
+    // Per-request cache: build_body and the pricing helpers may all ask for
+    // the model list during a single query.
+    static $cached = null;
+    if ( $cached !== null ) {
+      return $cached;
+    }
+
     $url = 'https://catalog.endpoints.ai.ovh.net/rest/v2/openrouter';
+
+    // This can run in the middle of a streaming completion, where the
+    // engine's http_api_curl stream handler is registered: it would hijack
+    // this fetch too (empty body, catalog "streamed" to nowhere) and we would
+    // silently fall back to the wrong model list. Detach the hooks around it.
+    global $wp_filter;
+    $saved_hooks = null;
+    if ( isset( $wp_filter['http_api_curl'] ) ) {
+      $saved_hooks = $wp_filter['http_api_curl'];
+      unset( $wp_filter['http_api_curl'] );
+    }
     $response = wp_remote_get( $url, [ 'timeout' => 10 ] );
+    if ( $saved_hooks !== null ) {
+      $wp_filter['http_api_curl'] = $saved_hooks;
+    }
 
     if ( is_wp_error( $response ) ) {
       return $this->get_fallback_models();
@@ -208,7 +243,8 @@ class Meow_MWAI_Engines_OVH extends Meow_MWAI_Engines_ChatML {
       }
     }
 
-    return !empty( $models ) ? $models : $this->get_fallback_models();
+    $cached = !empty( $models ) ? $models : $this->get_fallback_models();
+    return $cached;
   }
 
   /**

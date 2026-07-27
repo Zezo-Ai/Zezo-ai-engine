@@ -717,6 +717,14 @@
   display: flex;
   overflow: hidden;
   border-radius: var(--mwai-borderRadius);
+}
+.mwai-chatgpt-theme .mwai-input .mwai-input-text.mwai-locked {
+  opacity: 0.5;
+}
+.mwai-chatgpt-theme .mwai-input .mwai-input-text.mwai-locked input, .mwai-chatgpt-theme .mwai-input .mwai-input-text.mwai-locked textarea {
+  cursor: not-allowed;
+}
+.mwai-chatgpt-theme .mwai-input .mwai-input-text {
   background: transparent;
   border: none;
   padding: 0;

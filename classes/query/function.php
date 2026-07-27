@@ -8,6 +8,10 @@ class Meow_MWAI_Query_Function {
   public string $target; // 'server' or 'client'
   public string $behavior; // 'dynamic' (default) or 'static'
   public ?string $id;
+  // Raw JSON Schema (MCP-style inputSchema). When set, it is sent to the
+  // providers as-is and $parameters is ignored, so rich schemas (nested
+  // objects, oneOf, items types) survive without being flattened.
+  public ?array $rawSchema = null;
 
   public function __construct(
     string $name,
@@ -39,7 +43,43 @@ class Meow_MWAI_Query_Function {
     $this->behavior = ( $behavior === 'static' ) ? 'static' : 'dynamic';
   }
 
+  public static function from_raw_schema(
+    string $name,
+    string $description,
+    ?array $schema,
+    ?string $type = null,
+    ?string $id = null
+  ): Meow_MWAI_Query_Function {
+    $function = new self( $name, $description, [], $type, $id );
+    $function->rawSchema = is_array( $schema ) ? $schema : null;
+    return $function;
+  }
+
+  private function normalized_raw_schema(): array {
+    $schema = $this->rawSchema;
+    unset( $schema['$schema'] );
+    if ( empty( $schema['type'] ) ) {
+      $schema['type'] = 'object';
+    }
+    // An empty PHP array encodes as [], but every provider requires {} here.
+    if ( empty( $schema['properties'] ) ) {
+      $schema['properties'] = new stdClass();
+    }
+    if ( isset( $schema['required'] ) && empty( $schema['required'] ) ) {
+      unset( $schema['required'] );
+    }
+    return $schema;
+  }
+
   public function serializeForOpenAI() {
+    if ( $this->rawSchema !== null ) {
+      return [
+        'name' => $this->name,
+        'description' => $this->description,
+        'parameters' => $this->normalized_raw_schema(),
+      ];
+    }
+
     // Initialize the base structure with name and description
     $json = [ 'name' => $this->name, 'description' => $this->description ];
 
@@ -86,6 +126,14 @@ class Meow_MWAI_Query_Function {
   }
 
   public function serializeForAnthropic() {
+    if ( $this->rawSchema !== null ) {
+      return [
+        'name' => $this->name,
+        'description' => $this->description,
+        'input_schema' => $this->normalized_raw_schema(),
+      ];
+    }
+
     $json = [
       'name' => $this->name,
       'description' => $this->description,
@@ -120,6 +168,14 @@ class Meow_MWAI_Query_Function {
   }
 
   public function serializeForGemini() {
+    if ( $this->rawSchema !== null ) {
+      return [
+        'name' => $this->name,
+        'description' => $this->description,
+        'parameters' => $this->normalized_raw_schema(),
+      ];
+    }
+
     $json = [
       'name' => $this->name,
       'description' => $this->description,

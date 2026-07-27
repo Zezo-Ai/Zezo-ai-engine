@@ -27,8 +27,90 @@ class Meow_MWAI_Reply implements JsonSerializable {
   public $needFeedbacks = [];
   public $needClientActions = [];
 
+  // Tool/function calls actually executed during this turn, oldest first. Accumulated
+  // across the recursive feedback rounds (see Meow_MWAI_Engines_Core::run) so the final
+  // reply carries the whole chain, then stored in the discussion for the admin UI.
+  // Not exposed in jsonSerialize on purpose: arguments and results stay server-side.
+  public $toolCalls = [];
+
+  // What is KEPT for the discussion, not what is sent to the model: the request itself is
+  // untouched. These are copies written into mwai_chats.messages for the admin UI, so an
+  // MCP tool returning hundreds of KB, or a wp_write_blocks call carrying a whole article,
+  // would otherwise be duplicated into the discussion row and stay there forever.
+  public const TOOL_CALL_RESULT_LIMIT = 500;
+  // Long argument values are cut individually rather than by chopping the encoded blob:
+  // the panel shows the parameter names and pretty-prints the JSON, so the structure has
+  // to survive. Keys and scalars stay intact; only long strings shrink.
+  public const TOOL_CALL_ARG_VALUE_LIMIT = 200;
+  // Backstop for arguments made of many small values rather than one big one.
+  public const TOOL_CALL_ARGS_TOTAL_LIMIT = 4000;
+
   public function __construct( $query = null ) {
     $this->query = $query;
+  }
+
+  // Cut a string on a character boundary, so a truncated UTF-8 value never ends in a
+  // broken sequence that would make the stored JSON unreadable.
+  private static function truncate_text( $text, $limit ) {
+    if ( function_exists( 'mb_substr' ) ) {
+      if ( mb_strlen( $text, 'UTF-8' ) <= $limit ) {
+        return $text;
+      }
+      return mb_substr( $text, 0, $limit, 'UTF-8' );
+    }
+    if ( strlen( $text ) <= $limit ) {
+      return $text;
+    }
+    return substr( $text, 0, $limit );
+  }
+
+  private static function shrink_tool_arguments( $value, $depth = 0 ) {
+    if ( $depth > 6 ) {
+      return '[…]';
+    }
+    if ( is_array( $value ) ) {
+      $out = [];
+      foreach ( $value as $key => $item ) {
+        $out[$key] = self::shrink_tool_arguments( $item, $depth + 1 );
+      }
+      return $out;
+    }
+    if ( is_string( $value ) && strlen( $value ) > self::TOOL_CALL_ARG_VALUE_LIMIT ) {
+      // Say how much was dropped, so the panel never looks like the AI sent a short value.
+      return self::truncate_text( $value, self::TOOL_CALL_ARG_VALUE_LIMIT )
+        . '… [truncated, ' . size_format( strlen( $value ) ) . ']';
+    }
+    return $value;
+  }
+
+  public function add_tool_call( $name, $arguments = null, $result = null, $success = true ) {
+    $preview = is_string( $result ) ? $result : json_encode( $result );
+    if ( !is_string( $preview ) ) {
+      $preview = '';
+    }
+    if ( strlen( $preview ) > self::TOOL_CALL_RESULT_LIMIT ) {
+      $preview = self::truncate_text( $preview, self::TOOL_CALL_RESULT_LIMIT ) . '...';
+    }
+    $arguments = is_array( $arguments ) ? self::shrink_tool_arguments( $arguments ) : [];
+    // Many small values can still add up; fall back to the parameter names alone. Only
+    // the first few, because a call with hundreds of keys would otherwise produce a
+    // "summary" larger than the payload it replaces.
+    $encoded = json_encode( $arguments );
+    if ( is_string( $encoded ) && strlen( $encoded ) > self::TOOL_CALL_ARGS_TOTAL_LIMIT ) {
+      $keys = array_keys( $arguments );
+      $shown = array_slice( $keys, 0, 20 );
+      $summary = implode( ', ', $shown );
+      if ( count( $keys ) > count( $shown ) ) {
+        $summary .= ', and ' . ( count( $keys ) - count( $shown ) ) . ' more';
+      }
+      $arguments = [ '_truncated' => 'Arguments too large to store. Parameters: ' . $summary ];
+    }
+    $this->toolCalls[] = [
+      'name' => (string) $name,
+      'arguments' => $arguments,
+      'result' => $preview,
+      'success' => (bool) $success,
+    ];
   }
 
   #[\ReturnTypeWillChange]
@@ -314,12 +396,17 @@ class Meow_MWAI_Reply implements JsonSerializable {
             $expiry = 1 * HOUR_IN_SECONDS; // 1 hour for temporary images
           }
           else {
-            // Use the user's AI-generated image settings
+            // Use the user's AI-generated image settings. The Expiration
+            // setting displays "Never" as its default, so an unset option must
+            // mean never; letting it fall through to the uploaded-files TTL
+            // (1 hour) silently rotted images out of stored conversations.
             $localDownload = $mwai_core->get_option( 'image_local_download' );
-            $expiry = (int) $mwai_core->get_option( 'image_expires_download' );
+            $expiryOption = $mwai_core->get_option( 'image_expires_download' );
+            $expiry = ( empty( $expiryOption ) || strtolower( (string) $expiryOption ) === 'never' )
+              ? 'never' : (int) $expiryOption;
           }
 
-          // The expiry is already in seconds
+          // The expiry is in seconds, or 'never'.
           $ttl = $expiry;
 
           // Use 'library' or 'uploads' based on user settings

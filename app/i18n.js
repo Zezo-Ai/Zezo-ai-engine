@@ -122,6 +122,7 @@ i18n.COMMON = {
   IMAGES_GENERATOR_INTRO: __( 'Create stunning visuals with AI-powered image generation. Use detailed prompts, customize styles and resolutions, and generate multiple variations. Perfect for creative projects, marketing materials, and visual content.', 'ai-engine' ),
   PLAYGROUND: __( 'Playground', 'ai-engine' ),
   PLAYGROUND_HELP: __( 'Sandbox to test prompts, compare models, and tune parameters.', 'ai-engine' ),
+  WORKSPACE: __( 'Workspace', 'ai-engine' ),
   FORMS: __( 'Forms', 'ai-engine' ),
   FORMS_HELP: __( 'Smart forms with conditional logic, AI-generated answers, and text or file inputs.', 'ai-engine' ),
   SEARCH: __( 'Search', 'ai-engine' ),
@@ -232,6 +233,10 @@ i18n.COMMON = {
   ADMIN_BAR: __( 'Admin Bar', 'ai-engine' ),
   REFRESH: __( 'Refresh', 'ai-engine' ),
   DELETE: __( 'Delete', 'ai-engine' ),
+  CANCEL: __( 'Cancel', 'ai-engine' ),
+  CANNOT_BE_UNDONE: __( 'This cannot be undone.', 'ai-engine' ),
+  TYPE_TO_CONFIRM: __( 'To confirm, type:', 'ai-engine' ),
+  DELETE_EVERYTHING: __( 'Delete Everything', 'ai-engine' ),
   DELETE_ALL: __( 'Delete All', 'ai-engine' ),
   DELETE_SELECTED: __( 'Delete Selected', 'ai-engine' ),
   OPENAI_ORGANIZATION_ID: __( 'Organization ID', 'ai-engine' ),
@@ -515,6 +520,12 @@ i18n.HELP = {
 };
 
 i18n.SETTINGS = {
+  RESET_TITLE: __( 'Reset All Settings', 'ai-engine' ),
+  RESET_SCOPE: __( 'Every AI Engine setting on this site is about to be deleted and recreated from the defaults.', 'ai-engine' ),
+  RESET_SCOPE_KEYS: __( 'Your API keys, your AI environments and your module configuration all go. Every AI feature on the site stops working until you enter them again.', 'ai-engine' ),
+  RESET_SCOPE_CHATBOTS: __( 'Your chatbots and your custom themes are deleted as well, and only the default ones come back. Your discussions, knowledge bases and logs are kept.', 'ai-engine' ),
+  RESET_BACKUP: __( 'Cancel and use Export Settings first if you do not already have a backup.', 'ai-engine' ),
+  RESET_CONFIRM: __( 'Reset Settings', 'ai-engine' ),
   AI_ENV_SETUP: __( 'Add your API key in <b>Settings → AI → Environments</b>. %s covers most cases, so it\'s a no-brainer. Let\'s try? 🐱', 'ai-engine' ),
   AI_FRESH_INSTALL: __( 'Hello! 🐱 We have prepared an <b>OpenAI</b> environment for you, just paste your key in <b>Settings → Environments for AI</b>. Prefer Claude, Gemini, or another provider? Switch the environment type any time.', 'ai-engine' ),
   AI_DEFAULT_NO_KEY: __( 'Your default environment is %s, but it has no API key. Set one, or pick a different default in <b>Settings → AI → Environments</b>.', 'ai-engine' ),
@@ -634,6 +645,12 @@ i18n.TEMPLATES = {
   TEMPLATES: __( 'Templates', 'ai-engine' ),
   DELETE_CONFIRM: __( 'Are you sure you want to delete this template?', 'ai-engine' ),
   DELETE_ALL_CONFIRM: __( 'Are you sure you want to delete all the templates?', 'ai-engine' ),
+  DELETE_TITLE: __( 'Delete Template', 'ai-engine' ),
+  DELETE_SCOPE: __( 'This template will be permanently deleted for everyone who uses this site.', 'ai-engine' ),
+  DELETE_NAME: __( 'Template: %s', 'ai-engine' ),
+  RESET_ALL_TITLE: __( 'Reset All Templates', 'ai-engine' ),
+  RESET_ALL_SCOPE: __( 'Every template you created in this section will be permanently deleted and the built-in ones restored, for everyone who uses this site.', 'ai-engine' ),
+  RESET_ALL_CONFIRM: __( 'Reset Templates', 'ai-engine' ),
   NEW_TEMPLATE_NAME: __( 'New Template', 'ai-engine' ),
   EDIT: __( 'EDIT', 'ai-engine' )
 };
@@ -681,6 +698,33 @@ i18n.DISCUSSIONS = {
   DELETE: __( 'Delete', 'ai-engine' ),
   UNTITLED: __( 'Untitled', 'ai-engine' ),
   TITLE_GENERATION_PROMPT: __( 'Based on the following conversation, generate a concise and specific title for the discussion, strictly less than 64 characters. Focus on the main topic, avoiding unnecessary words such as articles, pronouns, or adjectives. Do not include any punctuation at the end. Do not include anything else than the title itself, only one sentence, no line breaks, just the title.', 'ai-engine' ),
+  DELETE_ALL_TITLE: __( 'Delete All Discussions', 'ai-engine' ),
+  DELETE_SELECTED_TITLE: __( 'Delete Selected Discussions', 'ai-engine' ),
+  DELETE_ALL_SCOPE: __( 'Every discussion stored on this site will be permanently deleted, for every user and every chatbot. Not only the ones visible in this list.', 'ai-engine' ),
+  DELETE_ALL_HISTORY: __( 'Your visitors and your logged-in users will lose their conversation history. Any chatbot that displays past discussions, including the Workspace, will start empty for everyone.', 'ai-engine' ),
+  DELETE_ALL_FILTERS: __( 'Filters and pagination are ignored: the discussions on the other pages are deleted too.', 'ai-engine' ),
+  DELETE_ALL_BACKUP: __( 'If you want to keep a copy, cancel and use Export first.', 'ai-engine' ),
+  DELETE_SELECTED_SCOPE: __( 'The selected discussions will be permanently deleted.', 'ai-engine' ),
+  DELETE_SELECTED_HISTORY: __( 'The users who own them will lose that conversation history in their chatbots and in the Workspace.', 'ai-engine' ),
+  DELETE_COUNT: __( 'Discussions to be deleted: %s', 'ai-engine' ),
+  DELETE_COUNT_UNKNOWN: __( 'Discussions to be deleted: all of them', 'ai-engine' ),
+};
+
+i18n.QUERIES = {
+  DELETE_ALL_TITLE: __( 'Delete All Logs', 'ai-engine' ),
+  DELETE_SELECTED_TITLE: __( 'Delete Selected Logs', 'ai-engine' ),
+  DELETE_ALL_SCOPE: __( 'Every logged query on this site will be permanently deleted, together with all of its metadata.', 'ai-engine' ),
+  DELETE_ALL_VIEWS: __( 'Query Logs and MCP Logs are stored together, so both are cleared, whichever of the two you are looking at.', 'ai-engine' ),
+  DELETE_ALL_FILTERS: __( 'Filters and pagination are ignored: the logs on the other pages are deleted too.', 'ai-engine' ),
+  DELETE_SELECTED_SCOPE: __( 'The selected logs will be permanently deleted, together with their metadata.', 'ai-engine' ),
+  DELETE_COUNT: __( 'Logs to be deleted: %s', 'ai-engine' ),
+  DELETE_COUNT_UNKNOWN: __( 'Logs to be deleted: all of them', 'ai-engine' ),
+};
+
+i18n.LIMITS = {
+  RESET_TITLE: __( 'Reset Limits', 'ai-engine' ),
+  RESET_SCOPE: __( 'Every limit in this section will be restored to its default value.', 'ai-engine' ),
+  RESET_CONFIRM: __( 'Reset Limits', 'ai-engine' ),
 };
 
 i18n.WRITING_STYLES = {
@@ -731,6 +775,13 @@ i18n.EMBEDDINGS = {
   FORCE_RECREATE_DESCRIPTION: __( 'Force recreation of existing embeddings even when content, model, and dimensions haven\'t changed. Note: New posts without embeddings will always be synced regardless of this setting.', 'ai-engine' ),
   DELETE_ALL_EMBEDDINGS: __( 'Delete All Embeddings', 'ai-engine' ),
   DELETE_ALL_EMBEDDINGS_CONFIRM: __( 'Are you sure you want to delete all the embeddings in this environment?', 'ai-engine' ),
+  DELETE_ALL_TITLE: __( 'Delete All Embeddings', 'ai-engine' ),
+  DELETE_SELECTED_TITLE: __( 'Delete Selected Embeddings', 'ai-engine' ),
+  DELETE_ALL_SCOPE: __( 'Every embedding in this environment will be permanently deleted, both on this site and in the vector database itself.', 'ai-engine' ),
+  DELETE_SELECTED_SCOPE: __( 'The selected embeddings will be permanently deleted, both on this site and in the vector database itself.', 'ai-engine' ),
+  DELETE_REBUILD: __( 'Any chatbot using this environment will stop finding context until you rebuild it, and re-embedding the same content will cost tokens again.', 'ai-engine' ),
+  DELETE_ENVIRONMENT: __( 'Environment: %s', 'ai-engine' ),
+  DELETE_COUNT: __( 'Embeddings to be deleted: %s', 'ai-engine' ),
   REWRITE_PROMPT_DESCRIPTION: __( 'Prompt for the rewrite. Supports {CONTENT}, {TITLE}, {URL}, {EXCERPT}, {LANGUAGE}, {ID}.', 'ai-engine' ),
   SYNC_ALL: __( 'Sync All', 'ai-engine' ),
   SYNC_ONE: __( 'Sync One', 'ai-engine' ),

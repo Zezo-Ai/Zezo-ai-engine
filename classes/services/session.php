@@ -3,6 +3,11 @@
 class Meow_MWAI_Services_Session {
   private $core;
   private $nonce = null;
+  // Memoized guest session id for this request. Without it, a guest whose first
+  // request has no cookie yet gets a fresh uniqid() on every call (setcookie
+  // does not populate $_COOKIE mid-request), so two calls in the same request
+  // disagree and guest-scoped checks (e.g. file ownership) mismatch.
+  private $sessionId = null;
 
   public function __construct( $core ) {
     $this->core = $core;
@@ -13,12 +18,12 @@ class Meow_MWAI_Services_Session {
     if ( session_status() !== PHP_SESSION_NONE ) {
       return false;
     }
-    
+
     // Check if we're in a context where sessions shouldn't be started
     if ( wp_doing_cron() || defined( 'DOING_AUTOSAVE' ) ) {
       return false;
     }
-    
+
     // For AI Engine REST endpoints only - check if it's actually our endpoint
     if ( $this->core->is_rest ) {
       $request_uri = $_SERVER['REQUEST_URI'] ?? '';
@@ -27,7 +32,7 @@ class Meow_MWAI_Services_Session {
         return false;
       }
     }
-    
+
     // Allow developers to override
     return apply_filters( 'mwai_allow_session', true );
   }
@@ -69,16 +74,22 @@ class Meow_MWAI_Services_Session {
       return $_COOKIE['mwai_session_id'];
     }
 
+    // Already generated one earlier in this request? Reuse it so repeated calls
+    // stay consistent (setcookie above does not populate $_COOKIE mid-request).
+    if ( $this->sessionId !== null ) {
+      return $this->sessionId;
+    }
+
     // If no cookie exists and we can set one, create it now (lazy initialization)
     if ( !headers_sent() && !wp_doing_cron() ) {
-      $sessionId = uniqid();
-      @setcookie( 'mwai_session_id', $sessionId, [
+      $this->sessionId = uniqid();
+      @setcookie( 'mwai_session_id', $this->sessionId, [
         'expires' => 0,
         'path' => '/',
         'secure' => is_ssl(),
         'httponly' => true,
       ] );
-      return $sessionId;
+      return $this->sessionId;
     }
 
     // For cron jobs or when headers are sent, return a temporary session ID
@@ -159,7 +170,7 @@ class Meow_MWAI_Services_Session {
   /**
    * Get session-based user ID for guest users
    * This creates a unique identifier based on session ID for tracking guest uploads
-   * 
+   *
    * @return string|null Session-based user ID or null if no session
    */
   public function get_session_user_id() {

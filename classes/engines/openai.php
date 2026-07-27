@@ -332,13 +332,18 @@ class Meow_MWAI_Engines_OpenAI extends Meow_MWAI_Engines_ChatML {
           $body['max_output_tokens'] = $query->maxTokens;
         }
 
-        // Handle temperature parameter - GPT-5 models don't support it
+        // Handle temperature parameter - GPT-5 and o-series reasoning models
+        // reject it (the Chat Completions path in chatml.php does the same via
+        // is_o1_model; this is the Responses API equivalent).
         if ( !empty( $query->temperature ) && $query->temperature !== 1 ) {
-          // Check if this is a GPT-5 model (gpt-5, gpt-5-mini, gpt-5-nano)
-          if ( strpos( $query->model, 'gpt-5' ) !== 0 ) {
+          $modelInfo = $this->retrieve_model_info( $query->model );
+          $modelTags = !empty( $modelInfo['tags'] ) ? $modelInfo['tags'] : [];
+          $noTemperature = strpos( $query->model, 'gpt-5' ) === 0 ||
+            in_array( 'o1-model', $modelTags, true ) ||
+            in_array( 'no-temperature', $modelTags, true );
+          if ( !$noTemperature ) {
             $body['temperature'] = $query->temperature;
           }
-          // For GPT-5 models, skip the temperature parameter entirely
         }
       }
 

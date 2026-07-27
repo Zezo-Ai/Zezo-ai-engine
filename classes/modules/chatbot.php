@@ -247,20 +247,32 @@ class Meow_MWAI_Modules_Chatbot {
         $data['usage'],
         $data['responseId'] ?? null
       );
+      // A paused turn waiting for a tool approval (Workspace WordPress Tools).
+      if ( !empty( $data['approval'] ) ) {
+        $final_res['approval'] = $data['approval'];
+      }
       return $this->create_rest_response( $final_res, 200 );
     }
     catch ( Exception $e ) {
       $message = apply_filters( 'mwai_ai_exception', $e->getMessage() );
+      // Refusals (limits, security) carry a user-facing message; overLimit lets
+      // the frontend lock the input instead of accepting doomed messages.
+      $isRefusal = $e instanceof Meow_MWAI_RefusedException;
+      $overLimit = $isRefusal && $e->reason === 'limits';
 
       // If we're in streaming mode, send the error through the stream
       if ( $stream ) {
         // Log the error
         error_log( '[AI Engine Chatbot Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
 
-        // Send error event through stream
+        // Send error event through stream. Internal errors stay generic for
+        // visitors; a refusal message is meant for them, so pass it through.
+        // Admins get the real error (they can act on it, e.g. in the Workspace).
         $errorData = [
           'type' => 'error',
-          'data' => 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.'
+          'data' => ( $isRefusal || current_user_can( 'manage_options' ) ) ? $message
+            : 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.',
+          'overLimit' => $overLimit
         ];
         echo 'data: ' . json_encode( $errorData ) . "\n\n";
         if ( ob_get_level() > 0 ) {
@@ -270,11 +282,20 @@ class Meow_MWAI_Modules_Chatbot {
         die();
       }
 
-      // For non-streaming, return normal error response
+      // For non-streaming, same rule as the streaming branch above: a refusal is
+      // written for the visitor and passes through, but an internal error (a
+      // provider failure, a function-call loop, etc.) must not leak its details
+      // to visitors. Mask it to a generic message for non-admins (the real one
+      // is logged); admins still see it so they can debug.
+      if ( !$isRefusal && !current_user_can( 'manage_options' ) ) {
+        error_log( '[AI Engine Chatbot Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+        $message = 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.';
+      }
       return $this->create_rest_response( [
         'success' => false,
-        'message' => $message
-      ], 500 );
+        'message' => $message,
+        'overLimit' => $overLimit
+      ], $overLimit ? 429 : 500 );
     }
   }
 
@@ -571,6 +592,38 @@ class Meow_MWAI_Modules_Chatbot {
         throw new Exception( 'Sorry, your query has been rejected.' );
       }
 
+      // Server params (model, envId, instructions, apiKey, tools, mcpServers...)
+      // are configured server-side and only reach a request through the resolved
+      // chatbot: a registered botId, or the customId transient that a shortcode
+      // override stores. They must never be trusted from the request body, or a
+      // hand-crafted call to this public endpoint could force an expensive model,
+      // swap the environment (and its API key), or replace the system prompt on
+      // someone else's site. Callers who can configure chatbots anyway (the
+      // Workspace, admins) are exempt so their per-conversation overrides keep
+      // working. See MWAI_CHATBOT_SERVER_PARAMS and the shortcode override path.
+      $allowClientServerParams = apply_filters(
+        'mwai_chatbot_allow_client_server_params',
+        $this->core->can_access_settings(),
+        $botId,
+        $params
+      );
+      if ( !$allowClientServerParams && is_array( $params ) ) {
+        foreach ( MWAI_CHATBOT_SERVER_PARAMS as $serverParam ) {
+          unset( $params[$serverParam] );
+        }
+        // The history in the body is display context, not a control channel.
+        // build_messages() appends these verbatim right after the real system
+        // prompt, so a 'system' (or 'developer'/'tool') turn smuggled in here
+        // would re-open the prompt-override hole from a second door. Keep only
+        // the user/assistant turns a real conversation is made of.
+        if ( !empty( $params['messages'] ) && is_array( $params['messages'] ) ) {
+          $params['messages'] = array_values( array_filter( $params['messages'], function ( $m ) {
+            $role = is_array( $m ) ? ( $m['role'] ?? '' ) : ( is_object( $m ) ? ( $m->role ?? '' ) : '' );
+            return in_array( $role, [ 'user', 'assistant' ], true );
+          } ) );
+        }
+      }
+
       // We need to check the integrity of the messages sent by the client.
       // This is important to ensure that the messages are not tampered with.
 
@@ -595,19 +648,40 @@ class Meow_MWAI_Modules_Chatbot {
             Meow_MWAI_Logging::warn( "Integrity Check: It seems the messages in the discussion #{$discussion['id']} do not match the ones sent by the client." );
           }
 
-          // Maintain conversation state for Responses API by loading previousResponseId
-          // This enables stateful conversations where only new messages are sent
+          // Maintain conversation state for the Responses API by restoring the
+          // stored response id when the client did not send one. Two things must
+          // both hold, and both were wrong before:
+          //   1. The keys. Discussions store previousResponseId / previousResponseDate
+          //      (see discussions.php), not responseId / responseDate, so this
+          //      restore silently never ran.
+          //   2. Ownership. A response id resumes the whole conversation server-side
+          //      at the provider, so restoring it for a chatId that belongs to
+          //      someone else would replay their private conversation to whoever
+          //      supplies the chatId. get_discussion() is intentionally not
+          //      owner-scoped, so gate the restore on ownership here: the same
+          //      logged-in user, or the same guest session that created it. The
+          //      official UI already restores previousResponseId client-side, so
+          //      this stays a safe server-side fallback, not the primary path.
           if ( empty( $params['previousResponseId'] ) && !empty( $discussion['extra'] ) ) {
             $extra = json_decode( $discussion['extra'], true );
-            if ( !empty( $extra['responseId'] ) ) {
-              // Response IDs expire after 30 days per OpenAI's policy
-              // Check if the stored response is still valid
-              $responseDate = !empty( $extra['responseDate'] ) ? strtotime( $extra['responseDate'] ) : 0;
+            $storedResponseId = $extra['previousResponseId'] ?? null;
+            if ( !empty( $storedResponseId ) ) {
+              $currentUserId = get_current_user_id();
+              $ownsDiscussion = false;
+              if ( $currentUserId && !empty( $discussion['userId'] )
+                  && (int) $discussion['userId'] === (int) $currentUserId ) {
+                $ownsDiscussion = true;
+              }
+              else if ( !$currentUserId && !empty( $params['session'] ) && !empty( $extra['session'] )
+                  && hash_equals( (string) $extra['session'], (string) $params['session'] ) ) {
+                $ownsDiscussion = true;
+              }
+              // Response IDs expire after 30 days per OpenAI's policy.
+              $responseDate = !empty( $extra['previousResponseDate'] )
+                ? strtotime( $extra['previousResponseDate'] ) : 0;
               $thirtyDaysAgo = time() - ( 30 * 24 * 60 * 60 );
-
-              if ( $responseDate > $thirtyDaysAgo ) {
-                // Use the stored response ID for stateful conversation
-                $params['previousResponseId'] = $extra['responseId'];
+              if ( $ownsDiscussion && $responseDate > $thirtyDaysAgo ) {
+                $params['previousResponseId'] = $storedResponseId;
               }
             }
           }
@@ -923,6 +997,14 @@ class Meow_MWAI_Modules_Chatbot {
           if ( ob_get_level() > 0 ) {
             ob_end_flush();
           }
+          // Usage and credits are committed (via the mwai_ai_reply filter) only
+          // after the model stream finishes. Without this, a client that
+          // disconnects mid-stream kills the PHP script on the next flush,
+          // before recording anything: the provider tokens are spent but the
+          // query is never counted and the limit never decremented, so aborting
+          // repeatedly evades usage limits. Finish the request even if the
+          // client left so the accounting stays honest.
+          ignore_user_abort( true );
         }
         else if ( $this->core->get_option( 'module_devtools' ) && $this->core->get_option( 'debug_mode' ) ) {
           // For non-streaming debug mode, collect events
@@ -950,6 +1032,11 @@ class Meow_MWAI_Modules_Chatbot {
       $extra = [];
       if ( $context ) {
         $extra = [ 'embeddings' => isset( $context['embeddings'] ) ? $context['embeddings'] : null ];
+      }
+      // Tools executed during this turn (functions, MCP, etc), so the Discussions
+      // admin screen can show what ran and with which parameters.
+      if ( !empty( $reply->toolCalls ) ) {
+        $extra['toolCalls'] = $reply->toolCalls;
       }
       // Store response ID for Responses API stateful conversations
       // CRITICAL: Must store even when function calls are present
@@ -1020,10 +1107,44 @@ class Meow_MWAI_Modules_Chatbot {
       }
 
     }
+    catch ( Meow_MWAI_ApprovalRequiredException $e ) {
+      // Not an error: the AI wants to run a tool that needs the user's
+      // approval (Workspace WordPress Tools). Pause the turn, hand the pending
+      // call to the UI, and store nothing; the turn is re-run once the user
+      // decides (with their decision as a request param).
+      $approval = [ 'tool' => $e->tool, 'args' => $e->args ];
+      if ( $stream ) {
+        $this->core->stream_push( [
+          'type' => 'live',
+          'subtype' => 'approval_request',
+          'data' => 'Waiting for your approval to run ' . $e->tool . '...',
+          'metadata' => $approval,
+        ], $query );
+        $final_res = $this->build_final_res( $botId, $newMessage, $newFileId, $params, '', null, [], [] );
+        $final_res['approval'] = $approval;
+        $this->core->stream_push( [ 'type' => 'end', 'data' => json_encode( $final_res ) ], $query );
+        die();
+      }
+      return [ 'reply' => '', 'images' => null, 'actions' => [], 'usage' => [], 'approval' => $approval ];
+    }
     catch ( Exception $e ) {
       $message = apply_filters( 'mwai_ai_exception', $e->getMessage() );
       if ( $stream ) {
-        $this->core->stream_push( [ 'type' => 'error', 'data' => $message ], $query );
+        // In streaming mode this catch runs before rest_chat's, so the refusal
+        // handling has to happen here too: overLimit lets the frontend lock the
+        // input, and internal errors stay generic for visitors (admins get the
+        // real one, they can act on it).
+        $isRefusal = $e instanceof Meow_MWAI_RefusedException;
+        $overLimit = $isRefusal && $e->reason === 'limits';
+        if ( !$isRefusal && !current_user_can( 'manage_options' ) ) {
+          error_log( '[AI Engine Chatbot Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+          $message = 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.';
+        }
+        $this->core->stream_push( [
+          'type' => 'error',
+          'data' => $message,
+          'overLimit' => $overLimit
+        ], $query );
         die();
       }
       else {
@@ -1127,7 +1248,13 @@ class Meow_MWAI_Modules_Chatbot {
     // Resolve the bot info
     $resolvedBot = $this->resolveBotInfo( $atts );
     if ( isset( $resolvedBot['error'] ) ) {
-      return $resolvedBot['error'];
+      // Config mistakes are for the people who can fix them: show the error to
+      // editors, keep it out of visitors' pages (it used to print publicly).
+      error_log( '[AI Engine] ' . wp_strip_all_tags( $resolvedBot['error'] ) );
+      if ( current_user_can( 'edit_posts' ) ) {
+        return $resolvedBot['error'];
+      }
+      return '';
     }
     $chatbot = $resolvedBot['chatbot'];
     $botId = $resolvedBot['botId'];
@@ -1338,7 +1465,13 @@ class Meow_MWAI_Modules_Chatbot {
     // Resolve the bot info
     $resolvedBot = $this->resolveBotInfo( $atts );
     if ( isset( $resolvedBot['error'] ) ) {
-      return $resolvedBot['error'];
+      // Config mistakes are for the people who can fix them: show the error to
+      // editors, keep it out of visitors' pages (it used to print publicly).
+      error_log( '[AI Engine] ' . wp_strip_all_tags( $resolvedBot['error'] ) );
+      if ( current_user_can( 'edit_posts' ) ) {
+        return $resolvedBot['error'];
+      }
+      return '';
     }
     $chatbot = $resolvedBot['chatbot'];
     $botId = $resolvedBot['botId'];

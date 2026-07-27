@@ -60,6 +60,9 @@ spl_autoload_register( function ( $class ) {
   else if ( strpos( $class, 'Meow_MWAI_FunctionCallException' ) !== false ) {
     $file = MWAI_PATH . '/classes/exceptions/function-call-exception.php';
   }
+  else if ( strpos( $class, 'Meow_MWAI_RefusedException' ) !== false ) {
+    $file = MWAI_PATH . '/classes/exceptions/refused-exception.php';
+  }
   else if ( strpos( $class, 'Meow_MWAI_Labs' ) !== false ) {
     $filename = str_replace( 'meow_mwai_labs_', '', strtolower( $class ) );
     // Convert underscores to hyphens for consistency

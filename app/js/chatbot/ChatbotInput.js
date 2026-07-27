@@ -1,5 +1,5 @@
-// Previous: 2.5.0
-// Current: 2.7.7
+// Previous: 3.0.0
+// Current: 3.6.3
 
 // React & Vendor Libs
 const { useRef, useState, useEffect, useImperativeHandle } = wp.element;
@@ -46,6 +46,12 @@ const ChatbotInput = () => {
   };
 
   const classNames = css('mwai-input-text', {
+    'mwai-dragging': state.draggingType,
+    'mwai-blocked': state.isBlocked,
+    // Locked (usage limit reached, GDPR consent pending): the field is disabled,
+    // so it needs to look unavailable. Kept off :disabled, which also fires while
+    // the bot is answering.
+    'mwai-locked': locked
   });
 
   return (

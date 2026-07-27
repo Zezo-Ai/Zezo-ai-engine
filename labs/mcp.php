@@ -518,7 +518,7 @@ class Meow_MWAI_Labs_MCP {
       return $this->attach_session_header( $response, $session_id );
 
     }
-    catch ( Exception $e ) {
+    catch ( Throwable $e ) {
       if ( $this->logging ) {
         error_log( '[AI Engine MCP] ❌ Exception in handle_direct_jsonrpc: ' . $e->getMessage() );
       }
@@ -978,11 +978,74 @@ class Meow_MWAI_Labs_MCP {
   #endregion
 
   #region Tools Call (execute_tool)
+
+  // Armed while a tool runs, so the shutdown net below can answer for it.
+  private static $currentToolCall = null;
+  private static $shutdownNetRegistered = false;
+  // Emergency memory reserve, released by the net so it can run even after an
+  // out-of-memory fatal on hosts where ini_set is disabled.
+  private static $memoryReserve = null;
+
+  /**
+   * A tool callback that dies hard (out of memory, fatal error) would end the
+   * request as a raw 500 with an empty body, and MCP clients then treat the
+   * WHOLE server as unreachable (Anthropic aborts the conversation with
+   * "Connection error while communicating with MCP server"). This shutdown
+   * net answers with a valid JSON-RPC tool error instead, so only the tool
+   * fails and the client/model can react to it.
+   */
+  private function arm_fatal_net( $tool, $id ) {
+    self::$currentToolCall = [ 'tool' => $tool, 'id' => $id ];
+    if ( self::$memoryReserve === null ) {
+      self::$memoryReserve = str_repeat( 'x', 2 * 1024 * 1024 );
+    }
+    if ( self::$shutdownNetRegistered ) {
+      return;
+    }
+    self::$shutdownNetRegistered = true;
+    // WordPress's own fatal handler runs first (registered at bootstrap) and
+    // exits after printing its "critical error" 500, which would keep our net
+    // from ever running. WP_SANDBOX_SCRAPING is core's shutdown-time escape
+    // hatch for "the request handles fatals itself" (the enabled filter is
+    // only consulted at bootstrap, so it cannot be used here).
+    if ( !defined( 'WP_SANDBOX_SCRAPING' ) ) {
+      define( 'WP_SANDBOX_SCRAPING', true );
+    }
+    register_shutdown_function( function () {
+      $ctx = self::$currentToolCall;
+      if ( empty( $ctx ) ) {
+        return;
+      }
+      $err = error_get_last();
+      if ( !$err || !in_array( $err['type'], [ E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ], true ) ) {
+        return;
+      }
+      // An OOM can leave ZERO headroom, killing this emitter itself. Free the
+      // reserve first (works everywhere), then lift the limit where allowed
+      // (the request is over anyway).
+      self::$memoryReserve = null;
+      @ini_set( 'memory_limit', '-1' );
+      // Discard any partial/buffered output so the JSON is the only body.
+      while ( ob_get_level() > 0 ) {
+        @ob_end_clean();
+      }
+      if ( !headers_sent() ) {
+        http_response_code( 200 );
+        header( 'Content-Type: application/json' );
+      }
+      $msg = 'The tool "' . $ctx['tool'] . '" crashed on this site (' .
+        substr( $err['message'], 0, 300 ) . '). The other tools should still work.';
+      echo '{"jsonrpc":"2.0","id":' . json_encode( $ctx['id'] ) .
+        ',"result":{"content":[{"type":"text","text":' . json_encode( $msg ) . '}],"isError":true}}';
+    } );
+  }
+
   private function execute_tool( $tool, $args, $id ) {
     $start = microtime( true );
     $response = null;
     $status = 'error';
     $error_msg = null;
+    $this->arm_fatal_net( $tool, $id );
     try {
       // Ensure tool access levels are populated (each HTTP request starts fresh)
       if ( empty( $this->tool_access_levels ) ) {
@@ -1068,12 +1131,29 @@ class Meow_MWAI_Labs_MCP {
 
       throw new Exception( "Unknown tool: {$tool}" );
     }
-    catch ( Exception $e ) {
+    catch ( Throwable $e ) {
+      // A failing tool is reported as a tool-level error (isError result),
+      // NOT a JSON-RPC protocol error: clients treat protocol errors as a
+      // broken server, while an isError result lets the model read the
+      // message and adapt. Throwable also catches TypeError & friends.
       $error_msg = $e->getMessage();
-      $response = $this->rpc_error( $id, -32603, $error_msg );
+      $response = [
+        'jsonrpc' => '2.0',
+        'id' => $id,
+        'result' => [
+          'content' => [
+            [
+              'type' => 'text',
+              'text' => 'The tool "' . $tool . '" failed: ' . $error_msg,
+            ],
+          ],
+          'isError' => true,
+        ],
+      ];
       return $response;
     }
     finally {
+      self::$currentToolCall = null;
       $duration_ms = (int) round( ( microtime( true ) - $start ) * 1000 );
       // Fire the action even on access denials and errors so admins can see
       // attempted-but-blocked tool calls in MCP Logs.

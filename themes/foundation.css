@@ -556,6 +556,14 @@
   display: flex;
   overflow: hidden;
   border-radius: var(--mwai-borderRadius);
+}
+.mwai-foundation-theme .mwai-input .mwai-input-text.mwai-locked {
+  opacity: 0.5;
+}
+.mwai-foundation-theme .mwai-input .mwai-input-text.mwai-locked input, .mwai-foundation-theme .mwai-input .mwai-input-text.mwai-locked textarea {
+  cursor: not-allowed;
+}
+.mwai-foundation-theme .mwai-input .mwai-input-text {
   background: var(--mwai-backgroundPrimaryColor);
   padding: calc(var(--mwai-spacing) / 2);
 }

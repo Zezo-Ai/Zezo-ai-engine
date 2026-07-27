@@ -17,7 +17,7 @@ class Meow_MWAI_Engines_Custom extends Meow_MWAI_Engines_ChatML {
   }
 
   protected function get_service_name() {
-    return ! empty( $this->env['name'] ) ? $this->env['name'] : 'Custom';
+    return !empty( $this->env['name'] ) ? $this->env['name'] : 'Custom';
   }
 
   public function get_models() {
@@ -55,7 +55,7 @@ class Meow_MWAI_Engines_Custom extends Meow_MWAI_Engines_ChatML {
       'Content-Type' => 'application/json',
       'User-Agent' => 'AI Engine',
     ];
-    if ( ! empty( $this->apiKey ) ) {
+    if ( !empty( $this->apiKey ) ) {
       $headers['Authorization'] = 'Bearer ' . $this->apiKey;
     }
     return $headers;
@@ -78,7 +78,7 @@ class Meow_MWAI_Engines_Custom extends Meow_MWAI_Engines_ChatML {
    * common starting point; users override per-env in settings.
    */
   private function resolve_endpoint() {
-    $endpoint = ! empty( $this->env['endpoint'] ) ? $this->env['endpoint'] : 'http://localhost:11434/v1';
+    $endpoint = !empty( $this->env['endpoint'] ) ? $this->env['endpoint'] : 'http://localhost:11434/v1';
     $endpoint = apply_filters( 'mwai_custom_endpoint', $endpoint, $this->env );
     return rtrim( $endpoint, '/' );
   }
@@ -93,7 +93,7 @@ class Meow_MWAI_Engines_Custom extends Meow_MWAI_Engines_ChatML {
     $url = $base . '/models';
 
     $headers = [ 'User-Agent' => 'AI Engine' ];
-    if ( ! empty( $this->apiKey ) ) {
+    if ( !empty( $this->apiKey ) ) {
       $headers['Authorization'] = 'Bearer ' . $this->apiKey;
     }
 
@@ -115,7 +115,7 @@ class Meow_MWAI_Engines_Custom extends Meow_MWAI_Engines_ChatML {
     }
 
     $body = json_decode( wp_remote_retrieve_body( $response ), true );
-    if ( ! isset( $body['data'] ) || ! is_array( $body['data'] ) ) {
+    if ( !isset( $body['data'] ) || !is_array( $body['data'] ) ) {
       return [];
     }
 
@@ -144,8 +144,14 @@ class Meow_MWAI_Engines_Custom extends Meow_MWAI_Engines_ChatML {
         'tags' => $tags,
       ];
 
-      if ( $isEmbedding ) {
-        $modelData['dimensions'] = isset( $remote['dimensions'] ) ? (int) $remote['dimensions'] : 1536;
+      // Only report dimensions when the server actually tells us. The OpenAI /models
+      // schema has no such field, so defaulting to 1536 made every embedding model look
+      // like a fixed 1536 one: the UI locked the field and we sent dimensions=1536 to
+      // servers whose model has another native size, or no support for the parameter at
+      // all (bad request). Unknown means the user can type the right value, and we send
+      // nothing until they do.
+      if ( $isEmbedding && isset( $remote['dimensions'] ) ) {
+        $modelData['dimensions'] = (int) $remote['dimensions'];
       }
 
       $models[] = $modelData;
@@ -163,7 +169,7 @@ class Meow_MWAI_Engines_Custom extends Meow_MWAI_Engines_ChatML {
     $details = [ 'endpoint' => $url ];
 
     $headers = [ 'User-Agent' => 'AI Engine' ];
-    if ( ! empty( $this->apiKey ) ) {
+    if ( !empty( $this->apiKey ) ) {
       $headers['Authorization'] = 'Bearer ' . $this->apiKey;
     }
 

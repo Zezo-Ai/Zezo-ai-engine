@@ -115,6 +115,12 @@ class Meow_MWAI_Core {
       $this->search = new Meow_MWAI_Modules_Search( $this );
     }
 
+    // Workspace (full-screen chat surface in wp-admin; admins only for now).
+    // Free shell; Knowledge, MCP Servers and Functions inside it are Pro.
+    if ( $this->get_option( 'module_workspace' ) && ( is_admin() || $this->is_rest ) ) {
+      new Meow_MWAI_Modules_Workspace( $this );
+    }
+
     // Forms Manager (standalone Forms UI + shortcode renderer)
     if ( $this->get_option( 'module_forms' ) ) {
       new Meow_MWAI_Modules_Forms_Manager( $this );
@@ -409,8 +415,12 @@ class Meow_MWAI_Core {
     foreach ( $placeholders as $key => $value ) {
       $text = str_replace( '{' . $key . '}', $value ?? '', $text );
     }
-    // Replace any remaining unmatched placeholders with a clear indicator
-    $text = preg_replace( '/\{[A-Z_]+\}/', '[N/A]', $text );
+    // Unmatched {ALL_CAPS} tokens are left as-is on purpose. This runs after
+    // content-aware has already injected {CONTENT}/{TITLE} page text into the
+    // instructions, so a blanket "{FOO} -> [N/A]" catch-all would corrupt the
+    // page's own content (e.g. an API doc mentioning {API_KEY}) and any literal
+    // template text the admin wants the model to see. Known placeholders are
+    // resolved by the loop above; everything else is real text, so pass it through.
     return $text;
   }
   #endregion

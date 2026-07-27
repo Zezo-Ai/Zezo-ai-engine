@@ -1044,7 +1044,26 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     // Adaptive thinking is always on (no disabled mode, no manual budget, no
     // assistant prefill). Our engine never sends those, so no special handling.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature', 'latest'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
+  ],
+  [
+    'model' => 'claude-opus-5',
+    'name' => 'Claude Opus 5',
+    'family' => 'claude-5',
+    'features' => ['completion'],
+    'price' => [
+      'in' => 5.00,
+      'out' => 25.00,
+    ],
+    'type' => 'token',
+    'unit' => 1 / 1000000,
+    'maxCompletionTokens' => 128000,
+    'maxContextualTokens' => 1000000,
+    'finetune' => false,
+    // Adaptive thinking (no extended-thinking param). Non-default temperature/
+    // top_p/top_k are rejected, same as the other Claude 5 models.
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature', 'latest'],
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-8',
@@ -1060,8 +1079,8 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxCompletionTokens' => 128000,
     'maxContextualTokens' => 1000000,
     'finetune' => false,
-    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature', 'latest'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature'],
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-7',
@@ -1078,7 +1097,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 1000000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-6',
@@ -1095,7 +1114,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 1000000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-5',
@@ -1112,7 +1131,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-sonnet-5',
@@ -1133,7 +1152,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     // assistant prefill). Non-default temperature/top_p/top_k are rejected; the
     // 'no-temperature' tag stops us sending temperature, and we never send top_p/top_k.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature', 'latest'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-sonnet-4-6',
@@ -1150,7 +1169,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 1000000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-sonnet-4-5-20250929',
@@ -1167,7 +1186,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-sonnet-4-5',
@@ -1184,7 +1203,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-1-20250805',
@@ -1202,7 +1221,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'finetune' => false,
     // Deprecated by Anthropic: retires on the Claude API on August 5, 2026.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-1',
@@ -1220,7 +1239,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'finetune' => false,
     // Deprecated by Anthropic: retires on the Claude API on August 5, 2026.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-20250514',
@@ -1237,7 +1256,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-opus-4-0',
@@ -1255,7 +1274,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'finetune' => false,
     // Deprecated by Anthropic: retires on the Claude API on June 15, 2026.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-sonnet-4-20250514',
@@ -1272,7 +1291,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-sonnet-4-0',
@@ -1290,7 +1309,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'finetune' => false,
     // Deprecated by Anthropic: retires on the Claude API on June 15, 2026.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-haiku-4-5-20251001',
@@ -1307,7 +1326,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-haiku-4-5',
@@ -1324,7 +1343,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'latest'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-3-7-sonnet-latest',
@@ -1341,7 +1360,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxContextualTokens' => 200000,
     'finetune' => false,
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
-    'tools' => ['code_interpreter', 'thinking']
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
     'model' => 'claude-3-5-sonnet-latest',

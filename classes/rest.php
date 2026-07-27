@@ -758,6 +758,10 @@ class Meow_MWAI_Rest {
         if ( ob_get_level() > 0 ) {
           ob_end_flush();
         }
+        // Finish the request even if the client disconnects, so usage/credits are
+        // still recorded after the stream completes. Otherwise an abort mid-stream
+        // kills the script before accounting runs. See chat_submit for details.
+        ignore_user_abort( true );
       }
 
       // Process Reply
@@ -1867,12 +1871,19 @@ class Meow_MWAI_Rest {
   }
 
   /**
-   * Loopback test that mimics the way Anthropic's claude.ai connector probes
-   * the OAuth discovery endpoint, so admins can detect a hosting-layer block
-   * (typically WP Engine's WAF rejecting the python-httpx User-Agent on
-   * /.well-known/oauth-* paths) without waiting until they try to connect from
-   * claude.ai. Hits the site's own public PRM URL with the same UA Anthropic
-   * uses and reports the result.
+   * Loopback test that mimics the way Anthropic's claude.ai connector reaches
+   * the site, so admins can detect a hosting-layer block without waiting until
+   * they try to connect from claude.ai. Two stages, because WAFs filter them
+   * independently and real tickets showed both patterns:
+   *
+   * 1. GET on the OAuth discovery path with the python-httpx User-Agent
+   *    (WP Engine's WAF blocks this one).
+   * 2. POST on /wp-json/mcp/v1/http, python-httpx vs neutral User-Agent
+   *    (Bluehost's mod_security lets discovery GETs through but 403s the
+   *    POSTs, so OAuth client registration and every MCP call fail while
+   *    stage 1 looks fine). Both POSTs are unauthenticated, so WordPress
+   *    itself answers them identically: any python-only difference in
+   *    status or content type is the firewall talking.
    */
   public function rest_mcp_self_test( $request ) {
     try {
@@ -1916,13 +1927,49 @@ class Meow_MWAI_Rest {
       $probe = $build( $probe_url, $probe_response );
       $reference = $build( $reference_url, $reference_response );
 
+      // Stage 2: the POST pair. An unauthenticated initialize is harmless and
+      // never reaches a tool; we only care whether the firewall lets it in.
+      $post_body = wp_json_encode( [
+        'jsonrpc' => '2.0',
+        'id' => 1,
+        'method' => 'initialize',
+        'params' => [
+          'protocolVersion' => '2025-03-26',
+          'capabilities' => new stdClass(),
+          'clientInfo' => [ 'name' => 'ai-engine-self-test', 'version' => '1.0' ],
+        ],
+      ] );
+      $post_args = [
+        'timeout' => 10,
+        'redirection' => 3,
+        'sslverify' => apply_filters( 'mwai_mcp_self_test_sslverify', true ),
+        'user-agent' => 'python-httpx/0.28.1',
+        'headers' => [
+          'Accept' => 'application/json, text/event-stream',
+          'Content-Type' => 'application/json',
+        ],
+        'body' => $post_body,
+      ];
+      $post_probe = $build( $resource_url, wp_remote_post( $resource_url, $post_args ) );
+      $post_reference_args = $post_args;
+      $post_reference_args['user-agent'] = 'AI-Engine-Self-Test/1.0';
+      $post_reference = $build( $resource_url, wp_remote_post( $resource_url, $post_reference_args ) );
+
+      $is_json = function ( $probe ) {
+        return $probe['content_type'] && strpos( $probe['content_type'], 'json' ) !== false;
+      };
+      // The firewall reveals itself by treating the python UA differently from
+      // the neutral one: different status, or a block page instead of the JSON
+      // that WordPress returns to both unauthenticated POSTs.
+      $post_blocked = ( $post_reference['reachable'] && (
+        ( !$post_probe['reachable'] )
+        || ( $post_probe['status'] !== $post_reference['status'] && in_array( $post_probe['status'], [ 403, 406, 418, 429 ], true ) )
+        || ( $is_json( $post_reference ) && !$is_json( $post_probe ) )
+      ) );
+
       $verdict = 'unknown';
       $message = '';
-      if ( $probe['reachable'] && $probe['status'] === 200 ) {
-        $verdict = 'ok';
-        $message = 'Your site allows the python-httpx User-Agent on the OAuth discovery path. Claude.ai\'s connector should be able to reach it.';
-      }
-      else if ( $probe['reachable'] && $probe['status'] === 403 ) {
+      if ( $probe['reachable'] && $probe['status'] === 403 ) {
         $verdict = 'waf_blocks_python_ua';
         $message = 'Your host returned 403 to a User-Agent containing "python" on the OAuth discovery path. Claude.ai uses python-httpx as its outbound HTTP client, so its connector will fail with "Couldn\'t reach the MCP server". This is a common default on WP Engine. Fix: add a Cloudflare Transform Rule that rewrites the User-Agent for /.well-known/oauth-* and /wp-json/mcp/v1/* paths before the request reaches your origin. See https://meowapps.com/fix-mcp-wordpress-connection for the full recipe.';
       }
@@ -1933,6 +1980,14 @@ class Meow_MWAI_Rest {
       else if ( !$probe['reachable'] ) {
         $verdict = 'unreachable';
         $message = 'The loopback request could not reach the site at all (' . esc_html( $probe['error'] ) . '). Check that the site is publicly resolvable and that the server can reach itself over HTTPS.';
+      }
+      else if ( $probe['status'] === 200 && $post_blocked ) {
+        $verdict = 'waf_blocks_python_post';
+        $message = 'OAuth discovery works, but your host blocks POST requests from the python-httpx User-Agent on /wp-json/mcp/v1/*. Claude.ai\'s connector will pass discovery and then fail at client registration ("Couldn\'t register with your sign-in service") or on the first MCP call. This pattern is common with mod_security on shared hosts (seen on Bluehost). Fix: ask your host to whitelist POST requests on the /wp-json/mcp/v1/ path, or add a Cloudflare Transform Rule that rewrites the User-Agent for /.well-known/oauth-* and /wp-json/mcp/v1/* before the request reaches your origin. See https://meowapps.com/fix-mcp-wordpress-connection for the full recipe.';
+      }
+      else if ( $probe['status'] === 200 ) {
+        $verdict = 'ok';
+        $message = 'Your site accepts the python-httpx User-Agent on both the OAuth discovery path (GET) and the MCP endpoint (POST). Claude.ai\'s connector should be able to reach it. If connecting still fails, run the same probes from an external machine: some servers reach themselves without going through the edge firewall.';
       }
       else {
         $verdict = 'unexpected_status';
@@ -1945,6 +2000,8 @@ class Meow_MWAI_Rest {
         'message' => $message,
         'probe' => $probe,
         'reference' => $reference,
+        'post_probe' => $post_probe,
+        'post_reference' => $post_reference,
       ], 200 );
     }
     catch ( Exception $e ) {

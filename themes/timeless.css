@@ -589,6 +589,14 @@
   display: flex;
   overflow: hidden;
   border-radius: var(--mwai-borderRadius);
+}
+.mwai-timeless-theme .mwai-input .mwai-input-text.mwai-locked {
+  opacity: 0.5;
+}
+.mwai-timeless-theme .mwai-input .mwai-input-text.mwai-locked input, .mwai-timeless-theme .mwai-input .mwai-input-text.mwai-locked textarea {
+  cursor: not-allowed;
+}
+.mwai-timeless-theme .mwai-input .mwai-input-text {
   width: 100%;
   background: var(--mwai-backgroundPrimaryColor);
   overflow: hidden;

@@ -58,6 +58,15 @@ class Meow_MWAI_Modules_Discussions {
       'callback' => [ $this, 'rest_discussions_delete' ],
       'permission_callback' => [ $this, 'can_delete_discussion' ],
     ] );
+    // Truncate a discussion to a client-provided (shorter) message set. Used by
+    // edit-and-branch: when a user edits an earlier message, everything after
+    // the edit point is dropped and the Responses API chain is reset so the
+    // model continues from the fork, not the stale tail.
+    register_rest_route( $this->namespace_ui, '/discussions/truncate', [
+      'methods' => 'POST',
+      'callback' => [ $this, 'rest_discussions_ui_truncate' ],
+      'permission_callback' => '__return_true'
+    ] );
   }
 
   public function can_delete_discussion( $request ) {
@@ -303,6 +312,129 @@ class Meow_MWAI_Modules_Discussions {
     }
   }
 
+  /**
+   * Overwrite a discussion's stored messages with a client-provided (shorter)
+   * set, and clear the stored Responses API id so the next turn forks cleanly.
+   * Ownership-guarded like the rest of the write path.
+   */
+  public function rest_discussions_ui_truncate( $request ) {
+    try {
+      $this->check_db();
+      $params = $request->get_json_params();
+      $chatId = isset( $params['chatId'] ) ? sanitize_text_field( $params['chatId'] ) : null;
+      $messages = isset( $params['messages'] ) && is_array( $params['messages'] ) ? $params['messages'] : null;
+
+      if ( is_null( $chatId ) || is_null( $messages ) ) {
+        return $this->create_rest_response( [ 'success' => false, 'message' => 'chatId and messages are required.' ], 400 );
+      }
+
+      $userId = get_current_user_id();
+      if ( !$userId ) {
+        return $this->create_rest_response( [ 'success' => false, 'message' => 'You need to be logged in.' ], 401 );
+      }
+
+      $chat = $this->wpdb->get_row(
+        $this->wpdb->prepare( "SELECT * FROM $this->table_chats WHERE chatId = %s", $chatId )
+      );
+      // Same ownership guard as chatbot_reply: never touch another user's row.
+      if ( $chat && (int) $chat->userId !== 0 && (int) $chat->userId !== (int) $userId ) {
+        return $this->create_rest_response( [ 'success' => false, 'message' => 'Not allowed.' ], 403 );
+      }
+
+      // Keep only known fields so a client can't inject arbitrary data.
+      // stopped and extra.model matter for stopped turns and model attribution.
+      $clean = [];
+      foreach ( $messages as $m ) {
+        if ( !isset( $m['role'] ) ) {
+          continue;
+        }
+        $entry = [ 'role' => sanitize_text_field( $m['role'] ), 'content' => $m['content'] ?? '' ];
+        if ( isset( $m['who'] ) ) {
+          $entry['who'] = sanitize_text_field( $m['who'] );
+        }
+        if ( !empty( $m['stopped'] ) ) {
+          $entry['stopped'] = true;
+        }
+        if ( !empty( $m['timestamp'] ) && is_numeric( $m['timestamp'] ) ) {
+          $entry['timestamp'] = (int) $m['timestamp'];
+        }
+        if ( isset( $m['extra'] ) && is_array( $m['extra'] ) ) {
+          $extraEntry = [];
+          if ( !empty( $m['extra']['model'] ) ) {
+            $extraEntry['model'] = sanitize_text_field( $m['extra']['model'] );
+          }
+          // Embeddings and tool calls used to be dropped here, so truncating or
+          // branching a discussion silently lost them on every surviving message.
+          if ( !empty( $m['extra']['embeddings'] ) && is_array( $m['extra']['embeddings'] ) ) {
+            $extraEntry['embeddings'] = $this->sanitize_message_extra( $m['extra']['embeddings'] );
+          }
+          if ( !empty( $m['extra']['toolCalls'] ) && is_array( $m['extra']['toolCalls'] ) ) {
+            $extraEntry['toolCalls'] = $this->sanitize_message_extra( $m['extra']['toolCalls'] );
+          }
+          if ( !empty( $extraEntry ) ) {
+            $entry['extra'] = $extraEntry;
+          }
+        }
+        $clean[] = $entry;
+      }
+
+      // No row yet (e.g. the very first turn was stopped before completing):
+      // create it, so the conversation survives a reload.
+      if ( !$chat ) {
+        $botId = isset( $params['botId'] ) ? sanitize_text_field( $params['botId'] ) : null;
+        if ( !$botId || empty( $clean ) ) {
+          return $this->create_rest_response( [ 'success' => true ], 200 );
+        }
+        $now = date( 'Y-m-d H:i:s' );
+        $this->wpdb->insert( $this->table_chats, [
+          'userId' => $userId,
+          'ip' => $this->core->get_ip_address(),
+          'messages' => json_encode( $clean ),
+          'extra' => json_encode( [] ),
+          'botId' => $botId,
+          'chatId' => $chatId,
+          'created' => $now,
+          'updated' => $now,
+        ] );
+        return $this->create_rest_response( [ 'success' => true ], 200 );
+      }
+
+      $extra = json_decode( $chat->extra, true );
+      $extra = is_array( $extra ) ? $extra : [];
+      unset( $extra['responseId'], $extra['previousResponseId'], $extra['responseDate'], $extra['previousResponseDate'] );
+
+      $this->wpdb->update(
+        $this->table_chats,
+        [ 'messages' => json_encode( $clean ), 'extra' => json_encode( $extra ), 'updated' => date( 'Y-m-d H:i:s' ) ],
+        [ 'chatId' => $chatId ]
+      );
+      return $this->create_rest_response( [ 'success' => true ], 200 );
+    }
+    catch ( Exception $e ) {
+      return $this->create_rest_response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+    }
+  }
+
+  // Sanitize a client-supplied structure of unknown shape (embeddings list, tool call
+  // arguments) before it goes back into the messages column. Keys and scalar leaves are
+  // sanitized, with a depth cap so a crafted payload cannot recurse without end.
+  private function sanitize_message_extra( $value, $depth = 0 ) {
+    if ( $depth > 6 ) {
+      return null;
+    }
+    if ( is_array( $value ) ) {
+      $out = [];
+      foreach ( $value as $key => $item ) {
+        $out[sanitize_text_field( (string) $key )] = $this->sanitize_message_extra( $item, $depth + 1 );
+      }
+      return $out;
+    }
+    if ( is_bool( $value ) || is_int( $value ) || is_float( $value ) || is_null( $value ) ) {
+      return $value;
+    }
+    return sanitize_text_field( (string) $value );
+  }
+
   public function cron_discussions() {
     // Track cron execution start
     $this->core->track_cron_start( 'mwai_discussions' );
@@ -388,6 +520,13 @@ class Meow_MWAI_Modules_Discussions {
         [ 'accessor' => 'user',  'value' => $userId ],
         [ 'accessor' => 'botId', 'value' => $botId ],
       ];
+
+      // Optional server-side search (content + title), used by the Workspace
+      // sidebar and available to the chatbot discussions UI.
+      $search = isset( $params['search'] ) ? sanitize_text_field( $params['search'] ) : '';
+      if ( $search !== '' ) {
+        $filters[] = [ 'accessor' => 'preview', 'value' => $search ];
+      }
 
       // Retrieve the chats
       $chats = $this->chats_query( [], $offset, $limit, $filters );
@@ -530,7 +669,9 @@ class Meow_MWAI_Modules_Discussions {
             break;
           case 'preview':
             $like = '%' . $this->wpdb->esc_like( $value ) . '%';
-            $where_clauses[] = 'messages LIKE %s';
+            // Match the message content AND the (AI or user) title.
+            $where_clauses[] = '(messages LIKE %s OR title LIKE %s)';
+            $where_values[] = $like;
             $where_values[] = $like;
             break;
             // Add other cases as needed
@@ -607,7 +748,12 @@ class Meow_MWAI_Modules_Discussions {
     }
 
     $messageExtra = [
-      'embeddings' => isset( $extra['embeddings'] ) ? $extra['embeddings'] : null
+      'embeddings' => isset( $extra['embeddings'] ) ? $extra['embeddings'] : null,
+      // Tools executed to produce this reply (name, arguments, truncated result).
+      'toolCalls' => isset( $extra['toolCalls'] ) ? $extra['toolCalls'] : null,
+      // The model that produced this reply, so UIs can attribute each message
+      // even after the user switches models mid-conversation.
+      'model' => $query->model ?? null,
     ];
     $chatExtra = [
       'session' => $query->session,
@@ -634,15 +780,16 @@ class Meow_MWAI_Modules_Discussions {
       $chatExtra['previousResponseDate'] = $now;
     }
 
+    $nowMs = (int) round( microtime( true ) * 1000 );
     if ( $chat ) {
       $chat->messages = json_decode( $chat->messages );
-      $userMessage = [ 'role' => 'user', 'content' => $newMessage ];
+      $userMessage = [ 'role' => 'user', 'content' => $newMessage, 'timestamp' => $nowMs ];
       if ( $shortcutName ) {
         $userMessage['shortcutName'] = $shortcutName;
         $userMessage['shortcutPrompt'] = $query->get_message();
       }
       $chat->messages[] = $userMessage;
-      $chat->messages[] = [ 'role' => 'assistant', 'content' => $rawText, 'extra' => $messageExtra ];
+      $chat->messages[] = [ 'role' => 'assistant', 'content' => $rawText, 'extra' => $messageExtra, 'timestamp' => $nowMs ];
       $chat->messages = json_encode( $chat->messages );
 
       // Update or merge extra data
@@ -666,13 +813,13 @@ class Meow_MWAI_Modules_Discussions {
       if ( !empty( $startSentence ) ) {
         $messages[] = [ 'role' => 'assistant', 'content' => $startSentence ];
       }
-      $userMessage = [ 'role' => 'user', 'content' => $newMessage ];
+      $userMessage = [ 'role' => 'user', 'content' => $newMessage, 'timestamp' => $nowMs ];
       if ( $shortcutName ) {
         $userMessage['shortcutName'] = $shortcutName;
         $userMessage['shortcutPrompt'] = $query->get_message();
       }
       $messages[] = $userMessage;
-      $messages[] = [ 'role' => 'assistant', 'content' => $rawText, 'extra' => $messageExtra ];
+      $messages[] = [ 'role' => 'assistant', 'content' => $rawText, 'extra' => $messageExtra, 'timestamp' => $nowMs ];
       $chat = [
         'userId' => $userId,
         'ip' => $userIp,
