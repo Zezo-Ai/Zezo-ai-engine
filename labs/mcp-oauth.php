@@ -647,10 +647,18 @@ class Meow_MWAI_Labs_MCP_OAuth {
    * multi-user MCP work can broaden this safely once per-token capability
    * scoping lands; until then, allowing a non-admin here re-opens CVE-class
    * privilege escalation through tools like wp_create_user.
+   *
+   * Test manage_options, not the 'administrator' role name. Passing a role name
+   * to user_can() only matches when that exact key sits in the user's
+   * capabilities meta, so admin-equivalent accounts (custom roles, caps granted
+   * individually, or a plugin filtering user_has_cap) were refused at the
+   * consent screen while every wp-admin settings page loaded fine for them.
+   * manage_options keeps the privilege-escalation fix intact: editors and below
+   * do not hold it, and multisite super admins pass via WP_User::has_cap().
    */
   public function user_can_authorize( $user_id ) {
     $user_id = (int) $user_id;
-    $allowed = $user_id > 0 && user_can( $user_id, 'administrator' );
+    $allowed = $user_id > 0 && user_can( $user_id, 'manage_options' );
     return (bool) apply_filters( 'mwai_mcp_oauth_user_can_authorize', $allowed, $user_id );
   }
   #endregion

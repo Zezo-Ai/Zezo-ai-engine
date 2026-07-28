@@ -1196,6 +1196,15 @@
   border-radius: 50%;
   animation: mwai-button-spinner 1s ease infinite;
 }
+.mwai-chatgpt-theme.mwai-form-container .mwai-form-submit.mwai-loading button .mwai-timer, .mwai-chatgpt-theme.mwai-form-container .mwai-form-reset.mwai-loading button .mwai-timer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-left: 16px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  opacity: 0.8;
+}
 .mwai-chatgpt-theme.mwai-form-container .mwai-form-output-container .mwai-form-output {
   font-size: var(--mwai-fontSize);
   position: relative;

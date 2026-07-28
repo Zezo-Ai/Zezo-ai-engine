@@ -112,7 +112,8 @@ class Meow_MWAI_Admin extends MeowKit_MWAI_Admin {
     $images_generator = isset( $admin_bar['images_generator'] ) && $admin_bar['images_generator'];
     $videos_generator = isset( $admin_bar['videos_generator'] ) && $admin_bar['videos_generator'];
     // Workspace is checked by default (a missing key counts as enabled), but
-    // only appears when the module is on and the Pro class runs it.
+    // only appears when the module is on and its class is loaded. The Workspace
+    // itself is free core; Knowledge, MCP Servers and Functions inside it are Pro.
     $workspace = ( !isset( $admin_bar['workspace'] ) || $admin_bar['workspace'] ) &&
       $this->core->get_option( 'module_workspace' ) &&
       class_exists( 'Meow_MWAI_Modules_Workspace' ) &&
@@ -288,6 +289,47 @@ class Meow_MWAI_Admin extends MeowKit_MWAI_Admin {
     <?php
   }
 
+  /**
+  * Strip the site's secrets out of the options before they are localized.
+  *
+  * This script is enqueued for can_access_features(), which is Editor or above, but the
+  * Settings screen behind it is manage_options. Without this, an Editor opening any
+  * wp-admin page could read every provider API key and both bearer tokens straight from
+  * the page source. Administrators keep the real values so Settings still works.
+  *
+  * The secrets are masked rather than removed: helpers-admin.js only tests whether a key
+  * is a non-empty string to decide if an environment is configured, so dropping them
+  * would show Editors a false "no API key" warning.
+  */
+  private function redact_secrets( $options ) {
+    if ( !is_array( $options ) || $this->core->can_access_settings() ) {
+      return $options;
+    }
+    $mask = '********';
+    $secret = '/(apikey|api_key|bearer_token|token|secret|password)/i';
+    foreach ( $options as $key => $value ) {
+      if ( is_string( $value ) && $value !== '' && preg_match( $secret, $key ) ) {
+        $options[$key] = $mask;
+      }
+    }
+    foreach ( [ 'ai_envs', 'embeddings_envs', 'mcp_envs' ] as $envKey ) {
+      if ( empty( $options[$envKey] ) || !is_array( $options[$envKey] ) ) {
+        continue;
+      }
+      foreach ( $options[$envKey] as $i => $env ) {
+        if ( !is_array( $env ) ) {
+          continue;
+        }
+        foreach ( $env as $field => $value ) {
+          if ( is_string( $value ) && $value !== '' && preg_match( $secret, $field ) ) {
+            $options[$envKey][$i][$field] = $mask;
+          }
+        }
+      }
+    }
+    return $options;
+  }
+
   public function admin_enqueue_scripts() {
     // Previously bailed entirely on the Site Editor to avoid conflicts, but that left
     // our block types unregistered there - patterns created via Appearance > Editor saved
@@ -400,7 +442,7 @@ class Meow_MWAI_Admin extends MeowKit_MWAI_Admin {
       'build_ref' => $build_ref,
       'rest_nonce' => wp_create_nonce( 'wp_rest' ),
       'session' => $this->core->get_session_id(),
-      'options' => $this->core->get_all_options(),
+      'options' => $this->redact_secrets( $this->core->get_all_options() ),
       'chatbots' => $this->core->get_chatbots(),
       'themes' => $this->core->get_themes(),
       'stream' => $this->core->get_option( 'ai_streaming' ),

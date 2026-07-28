@@ -200,6 +200,12 @@ class Meow_MWAI_Modules_Tasks {
         $update_data['schedule'] = $args['schedule'];
         $update_data['next_run'] = $this->calculate_next_run( $args['schedule'] );
       }
+      // Repair recurring tasks left with no next_run by older versions, which
+      // parked them there permanently after max_retries failures. Without this,
+      // sites that already hit the bug would stay broken after updating.
+      else if ( empty( $existing->next_run ) && $args['schedule'] !== 'once' ) {
+        $update_data['next_run'] = $this->calculate_next_run( $args['schedule'] );
+      }
 
       if ( $args['expires_at'] !== $existing->expires_at ) {
         $update_data['expires_at'] = $args['expires_at'];
@@ -700,9 +706,17 @@ class Meow_MWAI_Modules_Tasks {
       $update_data['error_count'] = $task->error_count + 1;
 
       if ( $update_data['error_count'] >= $task->max_retries ) {
-        // Max retries reached or exceeded
+        // Max retries reached: stop the fast retry loop, but a recurring task must
+        // stay on its schedule. Clearing next_run used to kill it permanently:
+        // tick() selects "status IN ('pending','error') AND next_run <= NOW()", and
+        // NULL never satisfies that comparison, so the task never ran again and no
+        // amount of re-saving settings or resetting crons could revive it (reported:
+        // discussions never pruned despite a 30-day retention). Only one-off tasks
+        // have nothing left to schedule.
         $update_data['status'] = 'error';
-        $update_data['next_run'] = null;
+        $update_data['next_run'] = $task->schedule === 'once'
+          ? null
+          : $this->calculate_next_run( $task->schedule, $now_ts );
       }
       else {
         // Retry with backoff

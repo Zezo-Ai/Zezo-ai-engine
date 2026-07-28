@@ -153,8 +153,11 @@ class Meow_MWAI_Labs_MCP {
   * unless a valid token is provided. This ensures MCP is secure even with default settings.
   */
   public function can_access_mcp( $request ) {
-    // Default to requiring administrator capability for security
-    $is_admin = current_user_can( 'administrator' );
+    // Default to requiring administrator capability for security. Checked via
+    // manage_options rather than the 'administrator' role name, so that
+    // admin-equivalent accounts (custom roles, individually granted caps) are
+    // not locked out. Same reasoning as user_can_authorize() in mcp-oauth.php.
+    $is_admin = current_user_can( 'manage_options' );
     return apply_filters( 'mwai_allow_mcp', $is_admin, $request );
   }
 

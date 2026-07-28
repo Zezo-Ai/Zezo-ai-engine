@@ -33,8 +33,17 @@ class Meow_MWAI_Services_Session {
       }
     }
 
-    // Allow developers to override
-    return apply_filters( 'mwai_allow_session', true );
+    // Off by default. Nothing in the plugin reads $_SESSION any more: the guest id moved
+    // to the mwai_session_id cookie and the news flag was dropped. Starting one anyway
+    // had two costs. It set a PHPSESSID cookie, so once a visitor used a chatbot every
+    // later page request carried a session cookie and Varnish (and most page caches)
+    // stopped serving them from cache. And PHP holds an exclusive write lock on the
+    // session file for the whole request, which serializes concurrent calls: that is the
+    // max_execution_time hang the MCP path had to work around with release_session_lock().
+    //
+    // Set this filter to true if your own code (a function-calling handler, for example)
+    // needs $_SESSION on AI Engine's REST endpoints.
+    return apply_filters( 'mwai_allow_session', false );
   }
 
   public function get_nonce( $force = false ) {
@@ -68,10 +77,56 @@ class Meow_MWAI_Services_Session {
     return $chatId;
   }
 
+  /**
+  * The guest session id doubles as an ownership key ("session_<id>" owns uploaded
+  * files), so it has to be unguessable AND unforgeable.
+  *
+  * It used to be uniqid(), which is microtime: knowing roughly when a session started
+  * left about a million candidates, so another guest's id could be enumerated rather
+  * than stolen. New ids are random_bytes() and carry an HMAC, so a guessed or invented
+  * id is rejected before it can claim anything.
+  *
+  * Legacy uniqid-shaped cookies are still accepted, otherwise every guest with an open
+  * browser would lose the files and conversations attached to their current session.
+  * They expire on their own: the cookie has no expiry, so it dies with the browser.
+  *
+  * Scope: this stops an id being guessed or invented. It does not stop someone who
+  * already holds a visitor's cookie from acting as that visitor, which is true of any
+  * session cookie and is why this one is HttpOnly, Secure and expires with the browser.
+  * Guessability was the actual defect here, since uniqid() is microtime.
+  */
+  private function sign_session_id( $id ) {
+    return hash_hmac( 'sha256', 'mwai_session|' . $id, wp_salt( 'auth' ) );
+  }
+
+  private function parse_session_cookie( $cookie ) {
+    if ( !is_string( $cookie ) || $cookie === '' ) {
+      return null;
+    }
+    // Signed format: "<id>.<signature>".
+    if ( strpos( $cookie, '.' ) !== false ) {
+      list( $id, $signature ) = array_pad( explode( '.', $cookie, 2 ), 2, '' );
+      if ( $id !== '' && hash_equals( $this->sign_session_id( $id ), $signature ) ) {
+        return $id;
+      }
+      // Claims to be signed but is not: refuse it rather than trust the raw value.
+      return null;
+    }
+    // Legacy uniqid() value (13 hex chars), issued before the signed format.
+    if ( preg_match( '/^[0-9a-f]{13}$/', $cookie ) ) {
+      return $cookie;
+    }
+    return null;
+  }
+
   public function get_session_id() {
     // Check if we have the session cookie
     if ( isset( $_COOKIE['mwai_session_id'] ) ) {
-      return $_COOKIE['mwai_session_id'];
+      $sessionId = $this->parse_session_cookie( $_COOKIE['mwai_session_id'] );
+      if ( $sessionId !== null ) {
+        return $sessionId;
+      }
+      // An unusable cookie falls through so a fresh, signed one is issued below.
     }
 
     // Already generated one earlier in this request? Reuse it so repeated calls
@@ -82,8 +137,8 @@ class Meow_MWAI_Services_Session {
 
     // If no cookie exists and we can set one, create it now (lazy initialization)
     if ( !headers_sent() && !wp_doing_cron() ) {
-      $this->sessionId = uniqid();
-      @setcookie( 'mwai_session_id', $this->sessionId, [
+      $this->sessionId = bin2hex( random_bytes( 16 ) );
+      @setcookie( 'mwai_session_id', $this->sessionId . '.' . $this->sign_session_id( $this->sessionId ), [
         'expires' => 0,
         'path' => '/',
         'secure' => is_ssl(),

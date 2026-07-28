@@ -674,8 +674,15 @@ class Meow_MWAI_Engines_Core {
   }
 
   public function stream_handler( $handle, $args, $url ) {
-    curl_setopt( $handle, CURLOPT_SSL_VERIFYPEER, false );
-    curl_setopt( $handle, CURLOPT_SSL_VERIFYHOST, false );
+    // Streaming requests carry the provider API key in the Authorization header,
+    // so they must verify certificates by default, exactly like the non-streaming
+    // path. This used to disable verification unconditionally, which silently
+    // overrode the 'sslverify' => MWAI_SSL_VERIFY the callers already pass.
+    // Only relax it when the site has explicitly opted out via MWAI_SSL_VERIFY.
+    if ( !MWAI_SSL_VERIFY ) {
+      curl_setopt( $handle, CURLOPT_SSL_VERIFYPEER, false );
+      curl_setopt( $handle, CURLOPT_SSL_VERIFYHOST, false );
+    }
 
     curl_setopt( $handle, CURLOPT_WRITEFUNCTION, function ( $curl, $data ) use ( $url ) {
       $length = strlen( $data );

@@ -1793,7 +1793,15 @@ class Meow_MWAI_Rest {
       $params = $request->get_json_params();
       $url = !empty( $params['url'] ) ? $params['url'] : null;
       $mediaId = isset( $params['mediaId'] ) ? intval( $params['mediaId'] ) : 0;
-      $path = !empty( $params['path'] ) ? $params['path'] : null;
+      // A client-supplied path is deliberately ignored. It used to reach
+      // file_get_contents() with only a stream-wrapper blocklist in front of it, so an
+      // absolute path or ../ went straight through and the bytes were forwarded to the
+      // configured transcription endpoint. On multisite that let a subsite administrator
+      // read the network wp-config.php and exfiltrate the auth salts off-host. This is
+      // the same class as CVE-2024-38791, which the image handler below already dropped
+      // its path for. mediaId stays: it resolves through get_attached_file() on a real
+      // attachment instead of an arbitrary string.
+      $path = null;
 
       // If mediaId is provided, get the file path
       if ( !$path && $mediaId > 0 ) {

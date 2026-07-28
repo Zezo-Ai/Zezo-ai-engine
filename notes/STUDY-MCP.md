@@ -41,7 +41,7 @@ with that core direction.
 - [~] **Gutenberg block authoring** — `wp_write_blocks` IMPLEMENTED (2026-07-02) in `labs/mcp-core.php`
       (free tier). 12 core block types (paragraph, heading, list, quote, image, buttons, group,
       columns, separator, spacer, code, html), replace/append/prepend modes, no partial writes.
-      Design in `STUDY-MCP-GUTENBERG.md`. VALIDATED against the live WP editor on ai.nekod.net:
+      Design doc removed once shipped (see commit history). VALIDATED against the live WP editor on ai.nekod.net:
       24/24 blocks valid across all 15 core types (one fix: image figcaption class is
       `wp-element-caption`, not `wp-block-image__caption`). Remaining: a live end-to-end MCP call to
       confirm the write path. The #1 forum ask and Novamira's only real lead. Biggest single product win.

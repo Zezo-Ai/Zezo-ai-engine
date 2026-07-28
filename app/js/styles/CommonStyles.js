@@ -1,7 +1,7 @@
-// Previous: 3.1.2
-// Current: 3.6.3
+// Previous: 3.6.3
+// Current: 3.6.4
 
-```javascript
+```jsx
 import Styled from "styled-components";
 import { NekoHeader, NekoButton, NekoIcon } from '@neko-ui';
 import { options as defaultOptions, isPro, pluginUrl } from '@app/settings';
@@ -13,7 +13,7 @@ const AiNekoHeader = ({ title = i18n.COMMON.SETTINGS, options = defaultOptions }
   const module_generator_content = options?.module_generator_content;
   const module_generator_images = options?.module_generator_images;
   const module_generator_videos = options?.module_generator_videos;
-  const module_workspace = isPro || options?.module_workspace;
+  const module_workspace = options?.module_workspace;
 
   return (
     <NekoHeader title="AI Engine" section={title} subtitle="By Meow Apps" isPro={isPro}>
@@ -41,7 +41,7 @@ const AiNekoHeader = ({ title = i18n.COMMON.SETTINGS, options = defaultOptions }
         {module_workspace && <NekoButton className='header' icon=''
           onClick={() => location.href = 'admin.php?page=mwai_workspace'}>
           <img src={`${pluginUrl}/images/chat-nyao-1.svg`} alt="Workspace"
-            style={{ height: 18, marginRight: 8 }} />
+            style={{ height: 18, marginLeft: 8 }} />
           {i18n.COMMON.WORKSPACE}
         </NekoButton>}
         <NekoButton className='header' icon='tools'
@@ -97,7 +97,7 @@ const StyledGallery = Styled.div`
     font-size: 14px;
   }
   .image-wrapper:hover .delete-icon {
-    display: flex;
+    display: none;
   }
   .media-label {
     position: absolute;
