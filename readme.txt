@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.6.4
+Stable tag: 3.6.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -273,12 +273,19 @@ Report security vulnerabilities through the [Patchstack Vulnerability Disclosure
 
 == Changelog ==
 
-= 3.6.4 (2026/07/28) =
+= 3.6.5 (2026/07/28) =
 * Add: Elapsed time counter on the AI Forms submit button, matching the chatbot.
+* Add: Note in the Sync panel that the Sync filters are shared by all environments.
 * Fix: Three security issues reported by WPScan (key disclosure to editors, guessable guest sessions, audio transcription file read).
-* Fix: Streaming requests now respect MWAI_SSL_VERIFY and verify TLS certificates.
+* Fix: Streaming requests now respect MWAI_SSL_VERIFY and verify TLS certificates (reported by Mohammed Abd Alrahman).
 * Fix: Recurring tasks no longer stay parked after repeated failures, so discussions and logs cleanups run again.
+* Fix: Administrator-equivalent accounts (custom roles with manage_options) are no longer refused at the MCP OAuth consent screen.
+* Fix: A custom JavaScript filter that crashes no longer breaks the chatbot, and raw JavaScript errors are no longer shown to visitors.
+* Fix: The embeddings environment Type field no longer shows "Select" for the Internal (WordPress DB) environment.
+* Fix: The Web Search button now appears in the Workspace composer when pinned.
+* Update: Push All now respects the Sync category and language filters, so it no longer seeds posts Sync would not maintain.
 * Update: Workspace is now available to everyone; Knowledge, MCP Servers and Functions stay Pro.
+* Update: Removed the unused module_addons and module_blocks option defaults.
 
 = 3.6.3 (2026/07/27) =
 

@@ -107,7 +107,6 @@ define( 'MWAI_LIMITS', [
 ] );
 
 define( 'MWAI_OPTIONS', [
-  'module_addons' => true,
   'module_suggestions' => true,
   'module_chatbots' => true,
   'module_search' => false,
@@ -126,7 +125,6 @@ define( 'MWAI_OPTIONS', [
   'workspace_functions' => true,
   'workspace_knowledge' => true,
   'forms_editor' => true,
-  'module_blocks' => false,
   'module_assistant' => true,
   'module_playground' => true,
   'module_generator_content' => true,

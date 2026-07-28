@@ -766,7 +766,7 @@ i18n.EMBEDDINGS = {
   AI_SEARCH: __( 'AI SEARCH', 'ai-engine' ),
   SYNC_POSTS: __( 'Sync Posts', 'ai-engine' ),
   AUTO_SYNC_POSTS: __( 'Auto-Sync Posts', 'ai-engine' ),
-  AUTO_SYNC_POSTS_DESCRIPTION: __( 'Embeddings will be created, updated or removed based on the activity related to your posts.', 'ai-engine' ),
+  AUTO_SYNC_POSTS_DESCRIPTION: __( 'Embeddings will be created, updated or removed based on the activity related to your posts. These settings are shared by all environments, and they also decide what Push All sends.', 'ai-engine' ),
   MAINTENANCE: __( 'Maintenance', 'ai-engine' ),
   MAINTENANCE_DESCRIPTION: __( 'Embeddings that are stale or outdated are automatically re-created in the background, for all environments.', 'ai-engine' ),
   REWRITE_CONTENT: __( 'Rewrite Content', 'ai-engine' ),

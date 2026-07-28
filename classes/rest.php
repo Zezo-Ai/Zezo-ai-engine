@@ -1331,12 +1331,60 @@ class Meow_MWAI_Rest {
     }
   }
 
+  /**
+   * Term joins mirroring the Sync settings, shared by the Push All count and the
+   * Push All id list so the two never disagree.
+   *
+   * Push All must select exactly what Sync would maintain. Otherwise it seeds the
+   * index with posts the lifecycle hooks never update or remove: a site syncing
+   * only 'fr' was pushing every language. Semantics match
+   * MeowPro_MWAI_Embeddings: an empty list means no filtering, a non-empty one
+   * requires at least one match. The joins go before the WHERE clause, so their
+   * arguments come first in the prepare() call.
+   */
+  private function sync_term_joins( $params, &$joinArgs ) {
+    global $wpdb;
+    $joinArgs = [];
+    $joins = '';
+    $csv = function ( $key ) use ( $params ) {
+      if ( empty( $params[$key] ) ) {
+        return [];
+      }
+      return array_values( array_filter( array_map( 'trim', explode( ',', $params[$key] ) ) ) );
+    };
+    $termJoin = function ( $alias, $taxonomy, $slugs ) use ( $wpdb, &$joins, &$joinArgs ) {
+      $placeholders = implode( ',', array_fill( 0, count( $slugs ), '%s' ) );
+      $joins .= " INNER JOIN {$wpdb->term_relationships} tr_{$alias}"
+        . " ON tr_{$alias}.object_id = p.ID"
+        . " INNER JOIN {$wpdb->term_taxonomy} tt_{$alias}"
+        . " ON tt_{$alias}.term_taxonomy_id = tr_{$alias}.term_taxonomy_id"
+        . " AND tt_{$alias}.taxonomy = '{$taxonomy}'"
+        . " INNER JOIN {$wpdb->terms} t_{$alias}"
+        . " ON t_{$alias}.term_id = tt_{$alias}.term_id AND t_{$alias}.slug IN ({$placeholders})";
+      $joinArgs = array_merge( $joinArgs, $slugs );
+    };
+    $postCategories = $csv( 'postCategories' );
+    if ( !empty( $postCategories ) ) {
+      $termJoin( 'cat', 'category', $postCategories );
+    }
+    // Polylang stores the language as a 'language' term whose slug is the code,
+    // which is what pll_get_post_language() returns. Without Polylang there is
+    // nothing to filter on, exactly like is_post_language_synced().
+    $postLanguages = $csv( 'postLanguages' );
+    if ( !empty( $postLanguages ) && taxonomy_exists( 'language' ) ) {
+      $termJoin( 'lang', 'language', $postLanguages );
+    }
+    return $joins;
+  }
+
   public function rest_helpers_count_posts( $request ) {
     try {
       global $wpdb;
       $params = $request->get_query_params();
       $postType = $params['postType'];
       $postStatus = !empty( $params['postStatus'] ) ? explode( ',', $params['postStatus'] ) : [ 'publish' ];
+      $joinArgs = [];
+      $joins = $this->sync_term_joins( $params, $joinArgs );
       $statusPlaceholders = implode( ',', array_fill( 0, count( $postStatus ), '%s' ) );
       $ignored_ids = $wpdb->get_col(
         "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_mwai_embedding_ignore'"
@@ -1350,10 +1398,11 @@ class Meow_MWAI_Rest {
       if ( $postType === 'attachment' ) {
         $mimeFilter = " AND p.post_mime_type LIKE 'image/%'";
       }
-      $query = "SELECT COUNT(*) FROM {$wpdb->posts} p
+      // COUNT(DISTINCT) because a post matching several joined terms would repeat.
+      $query = "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p" . $joins . "
                 WHERE p.post_type = %s
                 AND p.post_status IN ($statusPlaceholders)" . $exclude_sql . $mimeFilter;
-      $prepareArgs = array_merge( [ $postType ], $postStatus );
+      $prepareArgs = array_merge( $joinArgs, [ $postType ], $postStatus );
       $count = (int) $wpdb->get_var( $wpdb->prepare( $query, ...$prepareArgs ) );
       return $this->create_rest_response( [ 'success' => true, 'count' => $count ], 200 );
     }
@@ -1369,6 +1418,8 @@ class Meow_MWAI_Rest {
       $params = $request->get_query_params();
       $postType = $params['postType'];
       $postStatus = !empty( $params['postStatus'] ) ? explode( ',', $params['postStatus'] ) : [ 'publish' ];
+      $joinArgs = [];
+      $joins = $this->sync_term_joins( $params, $joinArgs );
 
       // Use direct SQL query instead of get_posts to avoid memory issues with large sites
       $statusPlaceholders = implode( ',', array_fill( 0, count( $postStatus ), '%s' ) );
@@ -1384,12 +1435,13 @@ class Meow_MWAI_Rest {
       if ( $postType === 'attachment' ) {
         $mimeFilter = " AND p.post_mime_type LIKE 'image/%'";
       }
-      $query = "SELECT p.ID FROM {$wpdb->posts} p
+      // DISTINCT because a post matching several of the joined terms would repeat.
+      $query = "SELECT DISTINCT p.ID FROM {$wpdb->posts} p" . $joins . "
                 WHERE p.post_type = %s
                 AND p.post_status IN ($statusPlaceholders)" . $exclude_sql . $mimeFilter . '
                 ORDER BY p.ID ASC';
 
-      $prepareArgs = array_merge( [ $postType ], $postStatus );
+      $prepareArgs = array_merge( $joinArgs, [ $postType ], $postStatus );
       $postIds = $wpdb->get_col( $wpdb->prepare( $query, ...$prepareArgs ) );
       $postIds = array_map( 'intval', $postIds );
 
