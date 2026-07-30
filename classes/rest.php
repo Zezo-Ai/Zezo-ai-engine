@@ -730,7 +730,10 @@ class Meow_MWAI_Rest {
 
   public function rest_ai_completions( $request ) {
     try {
-      $params = $request->get_json_params();
+      // can_access_features is Editor-and-up (and filterable), so the payload is not
+      // trusted: inject_params() honours a client-supplied apiKey for every query type,
+      // which would run the site's completions against a key of the caller's choosing.
+      $params = Meow_MWAI_Core::sanitize_rest_params( $request->get_json_params() );
       $message = $this->retrieve_message( $params );
       $query = new Meow_MWAI_Query_Text( $message );
       $query->inject_params( $params );
@@ -790,7 +793,9 @@ class Meow_MWAI_Rest {
 
   public function rest_ai_images( $request ) {
     try {
-      $params = $request->get_json_params();
+      // Same reasoning as rest_ai_completions(): Editor-reachable route, so the
+      // client-controlled apiKey override has to leave the array.
+      $params = Meow_MWAI_Core::sanitize_rest_params( $request->get_json_params() );
       $message = $this->retrieve_message( $params );
       $query = new Meow_MWAI_Query_Image( $message );
       $query->inject_params( $params );
@@ -847,10 +852,10 @@ class Meow_MWAI_Rest {
         }
       }
 
-      // Ensure params is always an array
-      if ( empty( $params ) ) {
-        $params = [];
-      }
+      // Ensure params is always an array, and strip the client-controlled keys. Done
+      // here rather than at each read above so both the multipart and the JSON branch
+      // are covered, and before the debug log so a blocked key is never written to it.
+      $params = Meow_MWAI_Core::sanitize_rest_params( $params );
 
       // Debug logging
       if ( $this->core->get_option( 'queries_debug_mode' ) ) {
@@ -1842,9 +1847,6 @@ class Meow_MWAI_Rest {
   public function rest_ai_transcribe_audio( $request ) {
     try {
       global $mwai;
-      $params = $request->get_json_params();
-      $url = !empty( $params['url'] ) ? $params['url'] : null;
-      $mediaId = isset( $params['mediaId'] ) ? intval( $params['mediaId'] ) : 0;
       // A client-supplied path is deliberately ignored. It used to reach
       // file_get_contents() with only a stream-wrapper blocklist in front of it, so an
       // absolute path or ../ went straight through and the bytes were forwarded to the
@@ -1853,6 +1855,14 @@ class Meow_MWAI_Rest {
       // the same class as CVE-2024-38791, which the image handler below already dropped
       // its path for. mediaId stays: it resolves through get_attached_file() on a real
       // attachment instead of an arbitrary string.
+      //
+      // Dropping the local $path alone was not enough (the 3.6.4 fix, bypassed): $params
+      // is forwarded to simpleTranscribeAudio(), whose inject_params() runs before the
+      // "URL or path required" guard and repopulates $query->path from $params['path'],
+      // which the engine then reads. The key has to leave the array itself.
+      $params = Meow_MWAI_Core::sanitize_rest_params( $request->get_json_params() );
+      $url = !empty( $params['url'] ) ? $params['url'] : null;
+      $mediaId = isset( $params['mediaId'] ) ? intval( $params['mediaId'] ) : 0;
       $path = null;
 
       // If mediaId is provided, get the file path

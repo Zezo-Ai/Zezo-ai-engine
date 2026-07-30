@@ -605,7 +605,15 @@ class Meow_MWAI_Modules_Workspace {
     try {
       // Handlers type the JSON-RPC id as ?int; the provider tool-call id is a
       // string ("call_..."), so pass a neutral int instead.
-      $result = apply_filters( 'mwai_mcp_callback', null, $name, $args, 0 );
+      //
+      // The fifth argument is the MCP server instance, and there is none here:
+      // the Workspace runs tools directly rather than over the MCP endpoint. It
+      // is still passed, as null, so the filter has one arity everywhere. Firing
+      // four arguments here while labs/mcp.php fires five meant a third-party
+      // handler registered with add_filter( ..., 10, 5 ) worked over MCP and then
+      // died with an ArgumentCountError the moment the same tool ran in the
+      // Workspace. Handlers that want the instance must tolerate null.
+      $result = apply_filters( 'mwai_mcp_callback', null, $name, $args, 0, null );
       if ( $result === null ) {
         $out = "The tool '{$name}' is not available on this site.";
         $failed = true;

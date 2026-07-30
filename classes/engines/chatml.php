@@ -1112,15 +1112,21 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
     }
     // Priority 2: File path
     else if ( !empty( $query->path ) ) {
-      if ( !file_exists( $query->path ) ) {
-        throw new Exception( 'Audio file not found: ' . $query->path );
+      // Last line of defense: REST callers never get to set this (the routes strip the
+      // key), but simpleTranscribeAudio() is public PHP API, so a path can legitimately
+      // arrive from site code. Confinement is not applied here on purpose: real callers
+      // do transcribe files from outside the uploads directory. Stream wrappers are the
+      // part that is never legitimate.
+      $path = Meow_MWAI_Core::sanitize_file_path( $query->path );
+      if ( !file_exists( $path ) ) {
+        throw new Exception( 'Audio file not found: ' . $path );
       }
-      if ( !is_readable( $query->path ) ) {
-        throw new Exception( 'Audio file is not readable: ' . $query->path );
+      if ( !is_readable( $path ) ) {
+        throw new Exception( 'Audio file is not readable: ' . $path );
       }
       $audioData = [
-        'data' => file_get_contents( $query->path ),
-        'length' => filesize( $query->path ) / 1024 // KB
+        'data' => file_get_contents( $path ),
+        'length' => filesize( $path ) / 1024 // KB
       ];
     }
     // Priority 3: Attached file object

@@ -117,8 +117,22 @@ class Meow_MWAI_Labs_MCP_OAuth {
   }
 
   public function reauth_for_authorize( $result ) {
-    $uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
-    if ( strpos( $uri, '/' . $this->namespace . '/oauth/authorize' ) === false ) {
+    // Match the RESOLVED REST route, exactly. This used to be a substring test against
+    // $_SERVER['REQUEST_URI'], which includes the query string: appending
+    // "?x=/mcp/v1/oauth/authorize" to ANY REST request made this fire, restoring the
+    // cookie user's full identity on a route that WP had deliberately downgraded to
+    // guest for lack of an X-WP-Nonce. That turned every authenticated REST endpoint
+    // into a CSRF sink, e.g. a top-level navigation to /wp/v2/users with _method=POST
+    // creating an administrator (CVE-2026-15988). WP dispatches the request using this
+    // same query var, so an exact comparison against it cannot disagree with the route
+    // that actually runs.
+    $route = isset( $GLOBALS['wp']->query_vars['rest_route'] )
+      ? (string) $GLOBALS['wp']->query_vars['rest_route'] : '';
+    if ( $route === '' ) {
+      return $result;
+    }
+    $route = '/' . trim( $route, '/' );
+    if ( $route !== '/' . $this->namespace . '/oauth/authorize' ) {
       return $result;
     }
     if ( !is_user_logged_in() ) {

@@ -1965,6 +1965,12 @@
   filter: brightness(1.1);
 }
 @media (max-width: 760px) {
+  .mwai-messages-theme.mwai-fullscreen.mwai-window.mwai-open, .mwai-messages-theme.mwai-fullscreen:not(.mwai-window) {
+    top: var(--mwai-vv-offset-top, 0) !important;
+    bottom: var(--mwai-vv-offset-bottom, 0) !important;
+    height: var(--mwai-vv-height, 100dvh);
+    max-height: var(--mwai-vv-height, 100dvh);
+  }
   .mwai-messages-theme.mwai-window.mwai-open {
     position: fixed;
     top: var(--mwai-vv-offset-top, 0) !important;

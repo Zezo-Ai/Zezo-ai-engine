@@ -22,23 +22,7 @@ class Meow_MWAI_API {
    * that should not be controlled by untrusted users
    */
   private function sanitize_rest_options( $options ) {
-    if ( !is_array( $options ) ) {
-      return [];
-    }
-
-    // List of sensitive parameters that should not be set via REST API
-    $blocked_params = [
-      'apiKey',
-      'path', // Block path parameter to prevent PHAR deserialization attacks
-    ];
-    $blocked_params = apply_filters( 'mwai_blocked_rest_params', $blocked_params, $options );
-
-    // Remove blocked parameters
-    foreach ( $blocked_params as $param ) {
-      unset( $options[$param] );
-    }
-
-    return $options;
+    return Meow_MWAI_Core::sanitize_rest_params( $options );
   }
 
   public function rest_api_init() {

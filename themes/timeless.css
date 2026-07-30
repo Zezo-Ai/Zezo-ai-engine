@@ -2102,6 +2102,12 @@
   filter: brightness(1.1);
 }
 @media (max-width: 760px) {
+  .mwai-timeless-theme.mwai-fullscreen.mwai-window.mwai-open, .mwai-timeless-theme.mwai-fullscreen:not(.mwai-window) {
+    top: var(--mwai-vv-offset-top, 0) !important;
+    bottom: var(--mwai-vv-offset-bottom, 0) !important;
+    height: var(--mwai-vv-height, 100dvh);
+    max-height: var(--mwai-vv-height, 100dvh);
+  }
   .mwai-timeless-theme.mwai-window.mwai-open {
     position: fixed;
     top: var(--mwai-vv-offset-top, 0) !important;

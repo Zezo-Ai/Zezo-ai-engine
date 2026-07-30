@@ -4,8 +4,8 @@ Tags: ai, chatbot, gpt, claude, openai
 Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.0
-Requires PHP: 7.4
-Stable tag: 3.6.5
+Requires PHP: 8.1
+Stable tag: 3.6.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -272,6 +272,15 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.6.6 (2026/07/30) =
+* Update: Minimum PHP version is now 8.1, declared in the plugin header so WordPress blocks activation on older versions.
+* Fix: Push All no longer exhausts the memory limit on large sites; post content is now checked in chunks.
+* Fix: Long Japanese and Chinese posts no longer produce empty content, which left their embeddings stale.
+* Fix: Hardened the REST endpoints against client-supplied file paths and API keys, corrected the MCP OAuth route match and guest session cookie, and stopped the chatbot key reaching Editors.
+* Fix: The mwai_mcp_callback filter now receives five arguments from both the Workspace and the MCP endpoint.
+* Add: CSV and JSON export for the Query and MCP logs, honouring the active filters and sort.
+* Fix: Chatbot input is no longer hidden behind the mobile keyboard in fullscreen, and shortcuts are now chips that don't inherit the site's button styles.
 
 = 3.6.5 (2026/07/28) =
 * Add: Elapsed time counter on the AI Forms submit button, matching the chatbot.

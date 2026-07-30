@@ -301,33 +301,54 @@ class Meow_MWAI_Admin extends MeowKit_MWAI_Admin {
   * is a non-empty string to decide if an environment is configured, so dropping them
   * would show Editors a false "no API key" warning.
   */
+  private const SECRET_FIELD_PATTERN = '/(apikey|api_key|bearer_token|token|secret|password)/i';
+
+  /**
+  * Mask the secret-looking fields of a single flat row, leaving everything else alone.
+  */
+  private function mask_secret_fields( $row ) {
+    if ( !is_array( $row ) ) {
+      return $row;
+    }
+    foreach ( $row as $field => $value ) {
+      if ( is_string( $value ) && $value !== '' && preg_match( self::SECRET_FIELD_PATTERN, $field ) ) {
+        $row[$field] = '********';
+      }
+    }
+    return $row;
+  }
+
   private function redact_secrets( $options ) {
     if ( !is_array( $options ) || $this->core->can_access_settings() ) {
       return $options;
     }
-    $mask = '********';
-    $secret = '/(apikey|api_key|bearer_token|token|secret|password)/i';
-    foreach ( $options as $key => $value ) {
-      if ( is_string( $value ) && $value !== '' && preg_match( $secret, $key ) ) {
-        $options[$key] = $mask;
-      }
-    }
+    $options = $this->mask_secret_fields( $options );
     foreach ( [ 'ai_envs', 'embeddings_envs', 'mcp_envs' ] as $envKey ) {
       if ( empty( $options[$envKey] ) || !is_array( $options[$envKey] ) ) {
         continue;
       }
       foreach ( $options[$envKey] as $i => $env ) {
-        if ( !is_array( $env ) ) {
-          continue;
-        }
-        foreach ( $env as $field => $value ) {
-          if ( is_string( $value ) && $value !== '' && preg_match( $secret, $field ) ) {
-            $options[$envKey][$i][$field] = $mask;
-          }
-        }
+        $options[$envKey][$i] = $this->mask_secret_fields( $env );
       }
     }
     return $options;
+  }
+
+  /**
+  * Chatbots ride in the same localized blob as the options, and a chatbot row carries its
+  * own apiKey that Meow_MWAI_Query_Base::inject_params() honours as a provider-key
+  * override. Redacting only the options left that one readable by any Editor. No shipped
+  * bundle writes the field, so it is normally empty, but the chatbots REST route accepts
+  * it, so it is reachable.
+  */
+  private function redact_chatbot_secrets( $chatbots ) {
+    if ( !is_array( $chatbots ) || $this->core->can_access_settings() ) {
+      return $chatbots;
+    }
+    foreach ( $chatbots as $i => $chatbot ) {
+      $chatbots[$i] = $this->mask_secret_fields( $chatbot );
+    }
+    return $chatbots;
   }
 
   public function admin_enqueue_scripts() {
@@ -443,7 +464,7 @@ class Meow_MWAI_Admin extends MeowKit_MWAI_Admin {
       'rest_nonce' => wp_create_nonce( 'wp_rest' ),
       'session' => $this->core->get_session_id(),
       'options' => $this->redact_secrets( $this->core->get_all_options() ),
-      'chatbots' => $this->core->get_chatbots(),
+      'chatbots' => $this->redact_chatbot_secrets( $this->core->get_chatbots() ),
       'themes' => $this->core->get_themes(),
       'stream' => $this->core->get_option( 'ai_streaming' ),
       'cache_buster' => $cache_buster, // Pass cache buster for lazy-loaded chunks

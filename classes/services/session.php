@@ -86,9 +86,9 @@ class Meow_MWAI_Services_Session {
   * than stolen. New ids are random_bytes() and carry an HMAC, so a guessed or invented
   * id is rejected before it can claim anything.
   *
-  * Legacy uniqid-shaped cookies are still accepted, otherwise every guest with an open
-  * browser would lose the files and conversations attached to their current session.
-  * They expire on their own: the cookie has no expiry, so it dies with the browser.
+  * 3.6.4 still accepted legacy uniqid-shaped cookies so that guests mid-session kept
+  * their files. That branch is gone: it left the original hole open to anyone who simply
+  * sent a uniqid-shaped value, which is the whole attack. Unsigned cookies are refused.
   *
   * Scope: this stops an id being guessed or invented. It does not stop someone who
   * already holds a visitor's cookie from acting as that visitor, which is true of any
@@ -112,10 +112,14 @@ class Meow_MWAI_Services_Session {
       // Claims to be signed but is not: refuse it rather than trust the raw value.
       return null;
     }
-    // Legacy uniqid() value (13 hex chars), issued before the signed format.
-    if ( preg_match( '/^[0-9a-f]{13}$/', $cookie ) ) {
-      return $cookie;
-    }
+    // Unsigned values are refused, including the legacy uniqid() shape (13 hex chars)
+    // that 3.6.4 still accepted for migration. Accepting them kept the original defect
+    // alive: the id doubles as an ownership key, so anyone could invent or enumerate a
+    // uniqid-shaped value and claim another guest's files. Re-signing such a cookie on
+    // first sight would not have helped, since a forged one is indistinguishable from a
+    // genuine one at that point. The cost of dropping it is that a guest still holding a
+    // pre-3.6.4 cookie starts a new session and loses the files uploaded in the old one.
+    // The cookie has no expiry, so it dies with the browser and that window is short.
     return null;
   }
 

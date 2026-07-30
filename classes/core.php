@@ -329,7 +329,12 @@ class Meow_MWAI_Core {
     }
 
     $maxLength = (int) ( $maxLength ? $maxLength : $this->get_option( 'context_max_length', 4096 ) );
-    $sentences = preg_split( '/(?<=[.?!。．！？])\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY );
+    // Japanese, Chinese and friends do not put a space after 。 so requiring trailing
+    // whitespace made a whole CJK article count as one single sentence, which the loop
+    // below then skipped for being over maxLength: the content came back empty and the
+    // post stayed forever stale. Split on CJK punctuation with no whitespace needed, and
+    // keep requiring it after Latin punctuation so "3.14" and "e.g." stay in one piece.
+    $sentences = preg_split( '/(?<=[。．！？])|(?<=[.?!])\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY );
     $hashes = [];
     $uniqueSentences = [];
     $total = 0;
@@ -345,6 +350,16 @@ class Meow_MWAI_Core {
         $hashes[] = $hash;
         $uniqueSentences[] = $sentence;
         $total += $length;
+      }
+    }
+
+    // A single sentence longer than maxLength is skipped by the loop above, so text with
+    // no sentence punctuation at all (Thai, a wall of text) would still come back empty.
+    // Trim it instead of dropping it: an over-long input must never produce no input.
+    if ( empty( $uniqueSentences ) ) {
+      $trimmed = preg_replace( '/^[\pZ\pC]+|[\pZ\pC]+$/u', '', $text );
+      if ( $trimmed !== '' ) {
+        $uniqueSentences = [ mb_substr( $trimmed, 0, $maxLength, 'UTF-8' ) ];
       }
     }
 
@@ -461,6 +476,43 @@ class Meow_MWAI_Core {
     }
 
     return $path;
+  }
+
+  /**
+  * Strip the parameters a client must never control out of a REST payload.
+  *
+  * Nulling a local $path inside a route handler is not enough: the raw params array is
+  * still forwarded to the query, inject_params() repopulates $query->path from it, and
+  * the engine then hands that straight to file_get_contents(). That is how the 3.6.4
+  * transcription fix was bypassed. Sanitizing the array itself covers every caller that
+  * forwards params, present and future.
+  *
+  * Keys are normalized before matching because Meow_MWAI_Query_Base::convert_keys()
+  * camel-cases them later: "path_" becomes "path" and "api_key" becomes "apiKey", so an
+  * exact-match blocklist would let both through.
+  *
+  * @param array $params The client-supplied parameters.
+  * @return array The parameters without the blocked keys.
+  */
+  public static function sanitize_rest_params( $params ) {
+    if ( !is_array( $params ) ) {
+      return [];
+    }
+    $blocked = [
+      'apiKey', // Overrides the environment's provider key.
+      'path', // Reaches file_get_contents() via inject_params(): arbitrary file read.
+    ];
+    $blocked = apply_filters( 'mwai_blocked_rest_params', $blocked, $params );
+    $normalize = function ( $key ) {
+      return strtolower( str_replace( '_', '', (string) $key ) );
+    };
+    $blocked = array_map( $normalize, (array) $blocked );
+    foreach ( array_keys( $params ) as $key ) {
+      if ( in_array( $normalize( $key ), $blocked, true ) ) {
+        unset( $params[$key] );
+      }
+    }
+    return $params;
   }
   #endregion
 
