@@ -6,19 +6,21 @@
 * This class implements a Model Context Protocol (MCP) server for AI Engine.
 *
 * Current Implementation:
-* - Works reliably with Claude App through the mcp.js relay
-* - Works directly with Claude.ai and ChatGPT via SSE connections
+* - Single Streamable HTTP endpoint (/mcp/v1/http), used by Claude, Claude Code and ChatGPT
+* - Authentication via OAuth (see mcp-oauth.php) or a static bearer token
+* - Optional URL-token endpoint (/mcp/v1/{token}) for clients that cannot send headers
 * - Properly handles agent cancellation signals (notifications/cancelled) to free workers immediately
 * - Uses 30-second timeout to prevent worker exhaustion from abandoned connections
 * - Sends heartbeat signals to detect dead connections quickly
-* - OAuth authentication flow is currently disabled due to security concerns
-*   (only static bearer tokens are supported)
+*
+* The legacy SSE transport (/mcp/v1/sse plus /messages, driven by a bundled mcp.js Node
+* relay) was removed in 3.6, once the MCP spec retired it. Streamable HTTP still answers
+* with text/event-stream framing, which is why the SSE handling below is still needed.
 *
 * Connection Management:
-* - Agents send notifications/cancelled when done, triggering immediate SSE closure
+* - Agents send notifications/cancelled when done, triggering immediate stream closure
 * - 30-second timeout ensures workers are freed even if agents forget to disconnect
 * - Heartbeat comments (every 10s) help proxies and connection_aborted() detect dead sockets
-* - Both the mcp.js relay and direct agent connections work reliably
 */
 
 class Meow_MWAI_Labs_MCP {

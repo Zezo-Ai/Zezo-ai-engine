@@ -42,10 +42,11 @@ define( 'MWAI_OPENAI_MODELS', [
     'name' => 'GPT-5.6 Terra',
     'family' => 'gpt-5',
     'features' => ['completion'],
+    // Price cut by OpenAI on 2026-07-30 (was 2.50 / 15.00 / 0.25).
     'price' => [
-      'in' => 2.50,
-      'out' => 15.00,
-      'cached' => 0.25,
+      'in' => 2.00,
+      'out' => 12.00,
+      'cached' => 0.20,
     ],
     'type' => 'token',
     'unit' => 1 / 1000000,
@@ -69,10 +70,11 @@ define( 'MWAI_OPENAI_MODELS', [
     'name' => 'GPT-5.6 Luna',
     'family' => 'gpt-5',
     'features' => ['completion'],
+    // Price cut by OpenAI on 2026-07-30 (was 1.00 / 6.00 / 0.10).
     'price' => [
-      'in' => 1.00,
-      'out' => 6.00,
-      'cached' => 0.10,
+      'in' => 0.20,
+      'out' => 1.20,
+      'cached' => 0.02,
     ],
     'type' => 'token',
     'unit' => 1 / 1000000,
@@ -599,9 +601,10 @@ define( 'MWAI_OPENAI_MODELS', [
     'name' => 'o3',
     'family' => 'o3',
     'features' => ['completion'],
+    // We were still on o3's launch-era pricing, so every o3 query was costed 7.5x too high.
     'price' => [
-      'in' => 15.00,
-      'out' => 60.00,
+      'in' => 2.00,
+      'out' => 8.00,
     ],
     'type' => 'token',
     'unit' => 1 / 1000000,

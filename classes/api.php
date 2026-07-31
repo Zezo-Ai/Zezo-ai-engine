@@ -1194,6 +1194,23 @@ class Meow_MWAI_API {
   #region Standard API (No REST API)
 
   /**
+  * Returns a stored discussion (read-only), or null if it doesn't exist.
+  * Useful to check whether a chatId already has history, for instance to avoid
+  * greeting a returning visitor twice when the front-end history is empty.
+  *
+  * @param string $botId The ID of the chatbot.
+  * @param string $chatId The ID of the discussion.
+  *
+  * @return array|null The discussion (with 'messages' decoded), or null.
+  */
+  public function getDiscussion( $botId, $chatId ) {
+    if ( !$this->discussions_module ) {
+      return null;
+    }
+    return $this->discussions_module->get_discussion( $botId, $chatId );
+  }
+
+  /**
   * Returns the status of AI Engine's capabilities.
   *
   * @return array {
