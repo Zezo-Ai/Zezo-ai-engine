@@ -2309,35 +2309,12 @@ class Meow_MWAI_Engines_OpenAI extends Meow_MWAI_Engines_ChatML {
     return parent::run_image_query( $query, $streamCallback );
   }
 
-  /**
-  * Override transcription to support new models
-  */
-  public function run_transcribe_query( $query ) {
-    // Check if using new transcription models
-    $newTranscribeModels = ['gpt-4o-transcribe', 'gpt-4o-mini-transcribe'];
-    if ( in_array( $query->model, $newTranscribeModels ) ) {
-      // These still use the /audio/transcriptions endpoint but with new models
-      // Just need to make sure the model name is passed correctly
-    }
-
-    // Use parent implementation (still uses audio endpoint)
-    return parent::run_transcribe_query( $query );
-  }
-
-  /**
-  * Override embedding query to support new models
-  */
-  public function run_embedding_query( $query ) {
-    // Check if using new embedding models
-    $newEmbeddingModels = ['text-embedding-3-small', 'text-embedding-3-large'];
-    if ( in_array( $query->model, $newEmbeddingModels ) ) {
-      // These still use the /embeddings endpoint but with improved models
-      // The parent implementation should handle this correctly
-    }
-
-    // Use parent implementation
-    return parent::run_embedding_query( $query );
-  }
+  // run_transcribe_query() and run_embedding_query() used to be overridden here with an
+  // empty branch for the "new" transcribe and embedding models, then a straight call to
+  // the parent. They did nothing but suggest special handling existed, which cost real
+  // debugging time. Every transcription model we ship, plus gpt-transcribe and the
+  // diarize variant, accepts the request the parent already builds (verified against the
+  // API on 2026-07-31), so the parent implementations are used directly.
 
   /**
   * Enhanced error handling for Responses API

@@ -1144,7 +1144,10 @@ class Meow_MWAI_API {
     $ai_audio_default_model = $this->core->get_option( 'ai_audio_default_model' );
 
     if ( empty( $ai_audio_default_model ) ) {
-      $ai_audio_default_model = 'whisper-1'; // Default transcription model
+      // Only used when no model was picked in the settings. gpt-4o-mini-transcribe replaced
+      // whisper-1 here because it costs half as much per second and transcribes better;
+      // whisper-1 stays available, it is simply no longer what you get by not choosing.
+      $ai_audio_default_model = 'gpt-4o-mini-transcribe';
     }
 
     $query = new Meow_MWAI_Query_Transcribe();

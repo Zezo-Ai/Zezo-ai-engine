@@ -489,13 +489,33 @@ class Meow_MWAI_Labs_MCP_OAuth {
   public function handle_token( WP_REST_Request $request ) {
     $grant_type = (string) ( $request->get_param( 'grant_type' ) ?? '' );
 
+    // A failing refresh used to be completely silent, which made "the connector stops
+    // working after a while and re-authorizes itself" impossible to diagnose: every
+    // branch below returns a bare OAuth error to a client that reports it as a generic
+    // permission problem. Tokens are never logged, only a short hash prefix so two lines
+    // can be tied to the same grant.
+    if ( $this->logging ) {
+      error_log( '[AI Engine MCP OAuth] → /oauth/token grant_type=' . ( $grant_type ?: '(none)' ) );
+    }
+
     if ( $grant_type === 'authorization_code' ) {
       return $this->handle_token_auth_code( $request );
     }
     if ( $grant_type === 'refresh_token' ) {
       return $this->handle_token_refresh( $request );
     }
+    if ( $this->logging ) {
+      error_log( '[AI Engine MCP OAuth] ❌ Unsupported grant_type: ' . ( $grant_type ?: '(none)' ) );
+    }
     return $this->oauth_error( 'unsupported_grant_type', 'Supported: authorization_code, refresh_token.', 400 );
+  }
+
+  /**
+  * Short, non-reversible marker for a token, so log lines can be correlated without
+  * ever writing a usable credential to disk.
+  */
+  private function token_marker( $token ) {
+    return substr( hash( 'sha256', (string) $token ), 0, 8 );
   }
 
   private function handle_token_auth_code( WP_REST_Request $request ) {
@@ -544,11 +564,15 @@ class Meow_MWAI_Labs_MCP_OAuth {
     $refresh_token = (string) ( $request->get_param( 'refresh_token' ) ?? '' );
     $client_id = (string) ( $request->get_param( 'client_id' ) ?? '' );
     if ( $refresh_token === '' ) {
+      if ( $this->logging ) {
+        error_log( '[AI Engine MCP OAuth] ❌ Refresh rejected: no refresh_token in the request.' );
+      }
       return $this->oauth_error( 'invalid_request', 'Missing refresh_token.', 400 );
     }
 
     global $wpdb;
     $hash = hash( 'sha256', $refresh_token );
+    $marker = $this->token_marker( $refresh_token );
     $row = $wpdb->get_row(
       $wpdb->prepare(
         "SELECT * FROM {$this->table_tokens} WHERE refresh_token_hash = %s AND revoked = 0 LIMIT 1",
@@ -556,25 +580,60 @@ class Meow_MWAI_Labs_MCP_OAuth {
       )
     );
     if ( !$row ) {
+      if ( $this->logging ) {
+        // Distinguish "never existed" from "already rotated or revoked": the second is the
+        // signature of a client refreshing twice with the same token, which rotation kills.
+        $revoked = $wpdb->get_var( $wpdb->prepare(
+          "SELECT id FROM {$this->table_tokens} WHERE refresh_token_hash = %s LIMIT 1",
+          $hash
+        ) );
+        error_log( '[AI Engine MCP OAuth] ❌ Refresh rejected for token ' . $marker . ': ' . ( $revoked
+          ? 'the grant exists but is revoked (already rotated, or revoked in Connected Apps).'
+          : 'no grant matches this refresh token.' ) );
+      }
       return $this->oauth_error( 'invalid_grant', 'Refresh token is invalid or revoked.', 400 );
     }
     if ( $row->refresh_expires && strtotime( $row->refresh_expires . ' UTC' ) < time() ) {
+      if ( $this->logging ) {
+        error_log( '[AI Engine MCP OAuth] ❌ Refresh rejected for token ' . $marker
+          . ': refresh token expired on ' . $row->refresh_expires . ' UTC.' );
+      }
       return $this->oauth_error( 'invalid_grant', 'Refresh token expired.', 400 );
     }
 
     $client = $this->get_client( $row->client_id );
     if ( !$client ) {
+      if ( $this->logging ) {
+        error_log( '[AI Engine MCP OAuth] ❌ Refresh rejected for token ' . $marker
+          . ': client ' . $row->client_id . ' no longer exists.' );
+      }
       return $this->oauth_error( 'invalid_client', 'Client not found.', 401 );
     }
     if ( $client_id !== '' && $client_id !== $client->client_id ) {
+      if ( $this->logging ) {
+        error_log( '[AI Engine MCP OAuth] ❌ Refresh rejected for token ' . $marker
+          . ': client_id in the request does not match the one on the grant.' );
+      }
       return $this->oauth_error( 'invalid_client', 'client_id mismatch.', 401 );
     }
     if ( !$this->authenticate_client_if_required( $client, $request ) ) {
+      if ( $this->logging ) {
+        error_log( '[AI Engine MCP OAuth] ❌ Refresh rejected for token ' . $marker
+          . ': client authentication failed (method ' . $client->token_endpoint_auth_method
+          . '). If this client authenticates with client_secret_basic, check that the host'
+          . ' forwards the Authorization header on POST requests.' );
+      }
       return $this->oauth_error( 'invalid_client', 'Client authentication failed.', 401 );
     }
 
     // Refresh-token rotation (OAuth 2.1 best practice): revoke the old grant and issue a new pair.
     $wpdb->update( $this->table_tokens, [ 'revoked' => 1 ], [ 'id' => $row->id ] );
+
+    if ( $this->logging ) {
+      error_log( '[AI Engine MCP OAuth] ✅ Refresh accepted for token ' . $marker
+        . ', user ' . (int) $row->user_id . ', client ' . $client->client_id
+        . '. Old grant revoked, new pair issued.' );
+    }
 
     return $this->issue_token_pair( $row->client_id, (int) $row->user_id, (string) $row->scope );
   }

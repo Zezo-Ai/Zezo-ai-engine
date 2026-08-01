@@ -38,6 +38,31 @@ class Meow_MWAI_Modules_Workspace {
   public const PREFS_META = 'mwai_workspace_prefs';
   public const BOT_ID = 'mwai_workspace';
   /**
+  * What this site's Workspace API can do, for clients that ship separately from
+  * the plugin (the mobile app updates through the App Store, sites update when
+  * they feel like it, so the two drift). Bump this whenever a client would need
+  * to know that a site is new enough for something, and never renumber it.
+  *
+  * ADDITIVE ONLY, and this covers two things:
+  *
+  * 1. Routes under mwai/v1/workspace. Renaming or removing one breaks every
+  *    phone in the wild until its owner updates the app.
+  * 2. Keys inside the payloads those routes return, build_bootstrap() above in
+  *    particular. Adding a key is always safe because clients ignore what they
+  *    do not know; removing or renaming one is not. The mobile app decodes that
+  *    payload strictly and treats a failed decode as a failed connection, so
+  *    dropping a key like modules.embeddings or wp_tools.site_name would not
+  *    degrade those devices, it would make their sites unconnectable. A rename
+  *    is one quiet line in a plugin diff and total at the other end.
+  *
+  * To retire a key: add its replacement, keep sending the old one, bump this
+  * constant, and only drop the old key once you are willing to tell everyone on
+  * an older app to update.
+  *
+  * 1: pairing, bootstrap, prefs, wp-tools, images, auth-check, pair-check.
+  */
+  public const API_VERSION = 1;
+  /**
   * MCP tools that must never be bridged into the Workspace conversation.
   *
   * mwai_image generates an image and hands back { id, url } as plain text. The image
@@ -78,19 +103,27 @@ class Meow_MWAI_Modules_Workspace {
   * AI Engine's chat/discussion endpoints gate on a wp_rest nonce (CSRF
   * protection for the in-admin, cookie-authenticated web app). The iOS
   * companion authenticates with a WordPress Application Password (HTTP Basic),
-  * which carries no nonce. Authorize those requests when — and only when — they
-  * are Basic-Auth (Application Password, NOT cookie) AND resolve to an admin.
-  * Cookie-authenticated browser requests are untouched, so their CSRF gate
-  * stays intact; Basic auth isn't CSRF-exposed, so satisfying the nonce for a
-  * capable user is safe (they can already use the whole WP REST API).
+  * which carries no nonce. Authorize those requests when, and only when, they
+  * were authenticated by an Application Password (NOT a cookie) AND resolve to
+  * an admin. Cookie-authenticated browser requests are untouched, so their CSRF
+  * gate stays intact; Basic auth isn't CSRF-exposed, so satisfying the nonce for
+  * a capable user is safe (they can already use the whole WP REST API).
+  *
+  * The check asks WordPress what authenticated THIS request rather than reading
+  * the Authorization header. Servers differ on how Basic credentials reach PHP:
+  * Apache with mod_php consumes the header into PHP_AUTH_USER and never exposes
+  * it as HTTP_AUTHORIZATION, so a header test failed there even though the app
+  * password had authenticated the user perfectly, and every chat message from
+  * the mobile app came back as 403. rest_get_authenticated_app_password() is set
+  * by core itself, so it is right on every server config, and it can never be
+  * true for a browser's cookie session.
   */
   public function authorize_app_password( $authorized, $request ) {
     if ( $authorized ) {
       return $authorized;
     }
-    $auth = $request instanceof WP_REST_Request ? $request->get_header( 'authorization' ) : '';
-    if ( $auth && stripos( $auth, 'basic ' ) === 0 && current_user_can( 'manage_options' ) ) {
-      return true;
+    if ( function_exists( 'rest_get_authenticated_app_password' ) && rest_get_authenticated_app_password() ) {
+      return current_user_can( 'manage_options' ) ? true : $authorized;
     }
     return $authorized;
   }
@@ -216,6 +249,12 @@ class Meow_MWAI_Modules_Workspace {
   private function build_bootstrap() {
     $user = wp_get_current_user();
     return [
+      // Version handshake. A client that needs something this site cannot do
+      // should be able to say "update AI Engine" instead of guessing at a 404
+      // from a route that does not exist yet. The plugin version is for humans
+      // and bug reports; api_version is what clients compare against.
+      'plugin_version' => MWAI_VERSION,
+      'api_version' => self::API_VERSION,
       'rest_url' => untrailingslashit( get_rest_url() ),
       'admin_url' => admin_url(),
       'api_url' => untrailingslashit( get_rest_url( null, 'mwai/v1' ) ),
@@ -712,6 +751,17 @@ class Meow_MWAI_Modules_Workspace {
       'callback' => [ $this, 'rest_pair' ],
       'permission_callback' => '__return_true',
     ] );
+    // Public on purpose: it only describes the caller's own request. See rest_auth_check().
+    register_rest_route( 'mwai/v1', '/workspace/auth-check', [
+      'methods' => 'GET',
+      'callback' => [ $this, 'rest_auth_check' ],
+      'permission_callback' => '__return_true',
+    ] );
+    register_rest_route( 'mwai/v1', '/workspace/pair-check', [
+      'methods' => 'GET',
+      'callback' => [ $this, 'rest_pair_check' ],
+      'permission_callback' => [ $this, 'can_access' ],
+    ] );
     register_rest_route( 'mwai/v1', '/workspace/devices', [
       'methods' => 'GET',
       'callback' => [ $this, 'rest_devices' ],
@@ -729,6 +779,18 @@ class Meow_MWAI_Modules_Workspace {
   // Application Passwords named with this prefix are "paired devices".
   public const PAIR_APP_PREFIX = 'Workspace by AI Engine';
   public const PAIR_TOKEN_TTL = 300; // 5 minutes.
+  /**
+  * Everything that can stop a phone from connecting (a server that drops the
+  * Authorization header, a security plugin filtering the REST API, a revoked
+  * device) is explained here. The messages below name the problem and link out
+  * rather than trying to teach .htaccess in a banner, the same way the MCP
+  * self-test points at the same page for its own failures.
+  *
+  * The fragment matters: that page opens on MCP and OAuth, so a phone user
+  * landing at the top would not recognise their problem. If the anchor is ever
+  * dropped from the page the link still works, it just lands higher up.
+  */
+  public const DOC_MOBILE_URL = 'https://meowapps.com/fix-mcp-wordpress-connection/#workspace-mobile';
 
   private function pairing_available( $user = null ) {
     if ( !class_exists( 'WP_Application_Passwords' ) || !function_exists( 'wp_is_application_passwords_available' ) ) {
@@ -817,7 +879,7 @@ class Meow_MWAI_Modules_Workspace {
 
     $created = WP_Application_Passwords::create_new_application_password(
       $user->ID,
-      [ 'name' => self::PAIR_APP_PREFIX . ' — ' . $device ]
+      [ 'name' => self::PAIR_APP_PREFIX . ' - ' . $device ]
     );
     if ( is_wp_error( $created ) ) {
       return new WP_REST_Response( [ 'success' => false, 'message' => $created->get_error_message() ], 500 );
@@ -833,6 +895,117 @@ class Meow_MWAI_Modules_Workspace {
       'app_password' => $password, // WordPress reveals this exactly once.
       'uuid' => $item['uuid'] ?? null,
     ], 200 );
+  }
+
+  /**
+  * What did this server actually do with the credentials the caller sent?
+  *
+  * A device can pair perfectly and then get 401 on every single call, and from
+  * inside WordPress that is invisible: the two usual causes (the server never
+  * forwards the Authorization header to PHP, or a security plugin refuses
+  * Application Password authentication) both look like "not logged in". The
+  * mobile app calls this after an unexpected 401 so it can name the real
+  * problem instead of telling the user to reconnect forever.
+  *
+  * Public on purpose: every field describes the caller's own request, so this
+  * tells an attacker exactly what a 401 from any other endpoint already does.
+  */
+  public function rest_auth_check( $request ) {
+    // It answers "were those credentials good?" with a 200, which is no more
+    // than any authenticated route already reveals through its 401. Still, the
+    // cheerful phrasing is the kind of thing a reviewer stops on, so it gets the
+    // same per-IP limiter as the pairing route. A client only ever calls this
+    // once, after a failure.
+    $ip = method_exists( $this->core, 'get_ip_address' ) ? $this->core->get_ip_address() : ( $_SERVER['REMOTE_ADDR'] ?? '' );
+    $rlKey = 'mwai_authchk_rl_' . md5( (string) $ip );
+    $attempts = (int) get_transient( $rlKey );
+    if ( $attempts >= 30 ) {
+      return new WP_REST_Response( [ 'success' => false, 'message' => 'Too many attempts. Please wait a minute.' ], 429 );
+    }
+    set_transient( $rlKey, $attempts + 1, MINUTE_IN_SECONDS );
+
+    $header = $request instanceof WP_REST_Request ? (string) $request->get_header( 'authorization' ) : '';
+    // Either location counts: mod_php consumes the header into PHP_AUTH_* and
+    // leaves get_header() empty, which is still a server that forwards it.
+    $sawHeader = $header !== '' || !empty( $_SERVER['PHP_AUTH_USER'] );
+    $userId = get_current_user_id();
+    $viaAppPassword = function_exists( 'rest_get_authenticated_app_password' )
+      && (bool) rest_get_authenticated_app_password();
+
+    if ( !$sawHeader ) {
+      // Careful with this wording: "the client sent nothing" and "the client
+      // sent credentials and this server stripped them" arrive here completely
+      // identically, so naming the server as the culprit would send users to
+      // their host for a bug that may be in the client. pair-check is the route
+      // that may be confident about it: it probes with a header it knows it sent.
+      $reason = 'no_authorization_header';
+      // The URL is inlined in the text as well as returned separately: a client
+      // that only renders `message` still gives the user somewhere to go.
+      $message = 'No credentials reached WordPress. Either the app sent none, or this server does not forward the Authorization header to PHP, which is a common host setting. ' . self::DOC_MOBILE_URL;
+    }
+    elseif ( !$userId ) {
+      $reason = 'credentials_rejected';
+      $message = 'WordPress received the credentials but refused them. The app password may have been revoked, or a security plugin may be blocking Application Passwords. ' . self::DOC_MOBILE_URL;
+    }
+    elseif ( !current_user_can( 'manage_options' ) ) {
+      $reason = 'not_admin';
+      $message = 'That account is not an administrator, and the Workspace is available to administrators only.';
+    }
+    else {
+      $reason = 'ok';
+      $message = 'Authentication is working.';
+    }
+
+    return new WP_REST_Response( [
+      'success' => true,
+      'reason' => $reason,
+      'message' => $message,
+      'authorization_header' => $sawHeader,
+      'authenticated' => $userId > 0,
+      'app_password' => $viaAppPassword,
+      'can_use_workspace' => $userId > 0 && current_user_can( 'manage_options' ),
+      'app_passwords_available' => $this->pairing_available( $userId ? wp_get_current_user() : null ),
+      'ssl' => is_ssl(),
+      'doc_url' => self::DOC_MOBILE_URL,
+    ], 200 );
+  }
+
+  /**
+  * Admin-side pre-flight for the QR panel: a loopback request back to this same
+  * site, carrying an Authorization header, to find out whether the header
+  * survives the trip to PHP. When it doesn't, pairing still succeeds (that
+  * endpoint is public) and every call after it fails, so the admin gets warned
+  * before scanning rather than after three revoked devices.
+  *
+  * The probe deliberately sends a Bearer token, not Basic credentials: it is a
+  * question about the header, not a login attempt, and a fake Basic login would
+  * feed the site's own IP to brute-force counters.
+  */
+  public function rest_pair_check( $request ) {
+    $response = wp_remote_get( rest_url( 'mwai/v1/workspace/auth-check' ), [
+      'timeout' => 10,
+      'headers' => [ 'Authorization' => 'Bearer mwai-header-probe' ],
+      'sslverify' => apply_filters( 'mwai_workspace_self_test_sslverify', true ),
+    ] );
+    // A blocked or failing loopback says nothing about the header: stay quiet
+    // rather than warn about a problem that may not exist.
+    if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
+      return new WP_REST_Response( [ 'success' => true, 'status' => 'unknown' ], 200 );
+    }
+    $body = json_decode( wp_remote_retrieve_body( $response ), true );
+    if ( !is_array( $body ) || !array_key_exists( 'authorization_header', $body ) ) {
+      return new WP_REST_Response( [ 'success' => true, 'status' => 'unknown' ], 200 );
+    }
+    if ( empty( $body['authorization_header'] ) ) {
+      return new WP_REST_Response( [
+        'success' => true,
+        'status' => 'header_stripped',
+        // No URL inline here: the admin panel renders doc_url as a real link.
+        'message' => 'This server does not forward the Authorization header to WordPress, so pairing will look like it worked but the app will not be able to connect.',
+        'doc_url' => self::DOC_MOBILE_URL,
+      ], 200 );
+    }
+    return new WP_REST_Response( [ 'success' => true, 'status' => 'ok' ], 200 );
   }
 
   public function rest_devices( $request ) {

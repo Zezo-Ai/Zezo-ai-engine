@@ -329,6 +329,13 @@ class Meow_MWAI_Core {
     }
 
     $maxLength = (int) ( $maxLength ? $maxLength : $this->get_option( 'context_max_length', 4096 ) );
+    // A zero or negative limit is a misconfiguration, never a request for no content. It used
+    // to return an empty string for any input, which silently emptied post content: embeddings
+    // stayed forever PENDING with only a log line, and chatbot context came back blank. Treat
+    // it as unset and use the default instead.
+    if ( $maxLength <= 0 ) {
+      $maxLength = 4096;
+    }
     // Japanese, Chinese and friends do not put a space after 。 so requiring trailing
     // whitespace made a whole CJK article count as one single sentence, which the loop
     // below then skipped for being over maxLength: the content came back empty and the

@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 3.6.7
+Stable tag: 3.6.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -294,6 +294,13 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.6.8 (2026/08/01) =
+* Fix: Workspace mobile app connection on servers that don't expose the Authorization header, with clearer pairing errors.
+* Fix: A Context Max Length of zero no longer empties posts, which blocked embeddings sync and blanked chatbot context.
+* Update: Transcription now defaults to gpt-4o-mini-transcribe instead of whisper-1.
+* Update: The mobile connection warning links to the troubleshooting page instead of showing the htaccess snippet.
+* Add: Logging on the MCP OAuth token endpoint for failing refreshes.
 
 = 3.6.7 (2026/07/31) =
 * Add: Workspace is officially launched on [iOS](https://apps.apple.com/app/workspace-for-wordpress/id6794717714). 
