@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 3.6.8
+Stable tag: 3.6.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -294,6 +294,11 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.6.9 (2026/08/01) =
+* Fix: Crash when clicking quickly through discussions, and slow image checks writing into the wrong message.
+* Fix: MCP token refresh being rejected on servers that pass Basic credentials to PHP instead of forwarding the header.
+* Fix: Stored chat messages could run scripts when an admin opened a discussion.
 
 = 3.6.8 (2026/08/01) =
 * Fix: Workspace mobile app connection on servers that don't expose the Authorization header, with clearer pairing errors.

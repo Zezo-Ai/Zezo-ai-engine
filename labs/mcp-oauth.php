@@ -683,6 +683,15 @@ class Meow_MWAI_Labs_MCP_OAuth {
           }
         }
       }
+      elseif ( isset( $_SERVER['PHP_AUTH_USER'] ) && $_SERVER['PHP_AUTH_USER'] === $client->client_id ) {
+        // Apache with mod_php performs HTTP Basic auth itself: it moves the credentials
+        // into PHP_AUTH_USER/PHP_AUTH_PW and never exposes the header, so get_header()
+        // above finds nothing even though the client sent one. A Bearer header is left
+        // alone, which is exactly why MCP tool calls keep working on these hosts while
+        // every single token refresh is rejected as invalid_client: the connection dies
+        // once the access token ages out and never comes back.
+        $provided_secret = (string) ( $_SERVER['PHP_AUTH_PW'] ?? '' );
+      }
     }
     else {
       $provided_secret = (string) ( $request->get_param( 'client_secret' ) ?? '' );

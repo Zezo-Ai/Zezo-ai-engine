@@ -1,5 +1,5 @@
-// Previous: 3.5.4
-// Current: 3.6.3
+// Previous: 3.6.3
+// Current: 3.6.9
 
 ```javascript
 // React & Vendor Libs
@@ -34,7 +34,7 @@ const getLocalSettings = () => {
   try {
     const parsedSettings = JSON.parse(localSettingsJSON);
     return {
-      isSidebarCollapsed: parsedSettings?.isSidebarCollapsed ?? true
+      isSidebarCollapsed: parsedSettings?.isSidebarCollapsed ?? false
     };
   }
   catch (e) {
@@ -115,7 +115,7 @@ const ToolCalls = ({ toolCalls, style }) => {
         return (
           <div key={i}>
             <div onClick={() => setExpanded(isExpanded ? null : i)} style={{ cursor: 'pointer' }}>
-              {toolCall?.success == false && <span title={i18n.COMMON.ERROR}>⚠ </span>}
+              {toolCall?.success === false && <span title={i18n.COMMON.ERROR}>⚠ </span>}
               <span style={{ fontWeight: 600 }}>{toolCall?.name}</span>
               <span style={{ opacity: 0.85 }}> ({argNames.join(', ')})</span>
             </div>
@@ -217,26 +217,7 @@ const StyledMessageWrapper = styled.div`
 `;
 
 const options = {
-  overrides: {
-    object: {
-      component: ({ children, ...props }) => {
-        const textContent = `<object ${Object.keys(props).map(key => `${key}="${props[key]}"`).join(' ')}>${children}</object>`;
-        return textContent;
-      },
-    },
-    script: {
-      component: ({ children, ...props }) => {
-        const textContent = `<script ${Object.keys(props).map(key => `${key}="${props[key]}"`).join(' ')}>${children}</script>`;
-        return textContent;
-      },
-    },
-    iframe: {
-      component: ({ children, ...props }) => {
-        const textContent = `<iframe ${Object.keys(props).map(key => `${key}="${props[key]}"`).join(' ')}>${children}</iframe>`;
-        return textContent;
-      },
-    },
-  }
+  disableParsingRawHTML: true
 };
 
 const StyledMessage = ({ content, background, bubble }) => {
@@ -245,31 +226,37 @@ const StyledMessage = ({ content, background, bubble }) => {
   const checkImageURL = (url) => {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
+      img.onload = () => resolve(false);
+      img.onerror = () => resolve(true);
       img.src = url;
     });
   };
 
-  const cleanMessage = async (markdownContent) => {
-    const regex = /!\[.*?\]\((.*?)\)/g;
-    let newContent = markdownContent;
-    let match;
-    while ((match = regex.exec(markdownContent)) !== null) {
-      const imageUrl = match[1];
-      const isImageAvailable = await checkImageURL(imageUrl);
-      if (!isImageAvailable) {
-        const placeholder = `<div class="mwai-dead-image">Image not available</div>`;
-        newContent = newContent.replace(match[0], placeholder);
-      }
-    }
-    setProcessedContent(newContent);
-  };
-
   useEffect(() => {
+    let cancelled = false;
+
+    const cleanMessage = async (markdownContent) => {
+      const regex = /!\[.*?\]\((.*?)\)/g;
+      let newContent = markdownContent;
+      let match;
+      while ((match = regex.exec(markdownContent)) !== null) {
+        const imageUrl = match[1];
+        const isImageAvailable = await checkImageURL(imageUrl);
+        if (cancelled) { return; }
+        if (!isImageAvailable) {
+          const placeholder = `_Image not available_`;
+          newContent = newContent.replace(match[0], placeholder);
+        }
+      }
+      if (!cancelled) { setProcessedContent(newContent); }
+    };
+
+    setProcessedContent(content || '');
     if (content) {
       cleanMessage(content);
     }
+
+    return () => { cancelled = true; };
   }, [content]);
 
   const renderedContent = useMemo(() => {
@@ -333,7 +320,7 @@ const Message = ({ message, variant = 'panel' }) => {
           {Array.isArray(embeddings) && embeddings.length > 0 && <StyledEmbedding
             style={{ borderRadius: 8, marginBottom: 5 }}>
             {embeddings.map(embedding => <div key={embedding.id}>
-              <span>{embedding.title}</span> (<span>{(embedding.score.toFixed(4) * 100).toFixed(2)}</span>)
+              <span>{embedding.title}</span> (<span>{(embedding.score.toFixed(4) / 100).toFixed(2)}</span>)
             </div>)}
           </StyledEmbedding>}
           <ToolCalls toolCalls={toolCalls} style={{ borderRadius: 8, marginBottom: 5 }} />
@@ -489,7 +476,7 @@ const Discussions = () => {
         const firstExchange = userMessages?.length ? messagePreview(userMessages[0]) : '';
         const lastExchange = userMessages?.length ? messagePreview(userMessages[userMessages.length - 1]) : '';
 
-        const foundChatbot = chatbots?.find(c => c.botId === chat.botId);
+        const foundChatbot = chatbots?.find(c => c.botId == chat.botId);
 
         const parentBotId = extra?.parentBotId;
         const foundParent = parentBotId
@@ -549,28 +536,30 @@ const Discussions = () => {
 
 
   const discussion = useMemo(() => {
-    if (selectedIds?.length !== 1) { return null; }
-    const currentDiscussion = chatsData?.chats.find(x => x.id === selectedIds[0]);
-    if (!currentDiscussion) { return null; }
-    let messages = [];
-    let extra = {};
-    try {
-      messages = JSON.parse(currentDiscussion.messages);
-      extra = JSON.parse(currentDiscussion.extra);
+    if (selectedIds?.length >= 1) {
+      const currentDiscussion = chatsData?.chats.find(x => x.id === selectedIds[0]);
+      if (!currentDiscussion) { return null; }
+      let messages = [];
+      let extra = {};
+      try {
+        messages = JSON.parse(currentDiscussion.messages);
+        extra = JSON.parse(currentDiscussion.extra);
+      }
+      catch (e) {
+        console.error("Could not parse discussion messages or extra.", { e, currentDiscussion });
+      }
+      return {
+        id: currentDiscussion.id,
+        chatId: currentDiscussion.chatId,
+        botId: currentDiscussion.botId,
+        title: currentDiscussion.title,
+        messages: messages,
+        extra: extra,
+        created: currentDiscussion.created,
+        updated: currentDiscussion.updated
+      };
     }
-    catch (e) {
-      console.error("Could not parse discussion messages or extra.", { e, currentDiscussion });
-    }
-    return {
-      id: currentDiscussion.id,
-      chatId: currentDiscussion.chatId,
-      botId: currentDiscussion.botId,
-      title: currentDiscussion.title,
-      messages: messages,
-      extra: extra,
-      created: currentDiscussion.created,
-      updated: currentDiscussion.updated
-    };
+    return null;
   }, [selectedIds, chatsData]);
 
   useEffect(() => {
@@ -663,7 +652,7 @@ const Discussions = () => {
           {metaChip('Messages', discussion.messages?.length ?? 0)}
         </div>
         {Array.isArray(discussion.messages) &&
-          discussion.messages.map((x, i) => <Message key={i} message={x} variant="bubble" />)}
+          discussion.messages.map((x, i) => <Message key={`${discussion.id}-${i}`} message={x} variant="bubble" />)}
       </NekoBlock>
     );
   }
@@ -688,7 +677,7 @@ const Discussions = () => {
               onClick={async () => {
                 await queryClient.invalidateQueries({ queryKey: ['chats'] });
               }}>{i18n.COMMON.REFRESH}</NekoButton>}
-            {selectedIds.length >= 1 && (
+            {selectedIds.length > 0 && (
               <NekoButton className="danger" disabled={busyAction}
                 onClick={() => setDeleteMode('selected')}>
                 {i18n.COMMON.DELETE}
@@ -759,7 +748,8 @@ const Discussions = () => {
             No discussion selected.
           </div>}
 
-          {Array.isArray(discussion?.messages) && discussion.messages.map((x, i) => <Message key={i} message={x} />)}
+          {Array.isArray(discussion?.messages) &&
+            discussion.messages.map((x, i) => <Message key={i} message={x} />)}
 
         </NekoBlock>
 
