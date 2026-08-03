@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 3.6.9
+Stable tag: 3.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -294,6 +294,12 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.7.0 (2026/08/03) =
+* Fix: Qdrant collections were always created with 1536 dimensions regardless of the embedding model, and default dimensions are now read from the right place.
+* Update: Embedding dimensions are no longer locked for OpenAI-compatible models, as that size is only a guess.
+* Fix: The MCP access level no longer restricts OAuth connections, and the setting is no longer hidden behind the bearer token.
+* Fix: MCP connections no longer drop at random when the client refreshes its access token.
 
 = 3.6.9 (2026/08/01) =
 * Fix: Crash when clicking quickly through discussions, and slow image checks writing into the wrong message.

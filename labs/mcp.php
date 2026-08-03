@@ -749,6 +749,25 @@ class Meow_MWAI_Labs_MCP {
   #endregion
 
   #region Access Control
+  /**
+  * Whether the Access Level setting narrows this request.
+  *
+  * It governs the shared bearer token, which is what its description has always
+  * said: one secret handed to a script, so the owner decides how far it reaches.
+  * An OAuth connection is the opposite case. It belongs to one person who signed
+  * in as themselves, and the authorize step already refuses anyone without
+  * manage_options, so narrowing them again by a global role meant an
+  * administrator on Claude Desktop silently lost every admin-level tool, with no
+  * reason given and no setting on screen to explain it (the selector only appears
+  * when a bearer token is configured).
+  *
+  * Both the listing and the execution gate call this. They used to decide it
+  * separately, which is how they drifted apart in the first place.
+  */
+  private function role_filter_applies(): bool {
+    return $this->auth_method !== 'oauth' && $this->mcp_role !== 'admin';
+  }
+
   private function role_has_access( string $toolLevel ): bool {
     if ( $this->mcp_role === 'admin' ) {
       return true;
@@ -800,8 +819,17 @@ class Meow_MWAI_Labs_MCP {
       }
     }
 
-    // Filter tools by access level based on the MCP role
-    if ( $this->mcp_role !== 'admin' ) {
+    // Filter tools by access level based on the MCP role.
+    //
+    // This applies to the shared bearer token only, which is what the setting has
+    // always described: one secret handed to a script, so the site owner decides
+    // how far it reaches. An OAuth connection is the opposite case. It belongs to
+    // one person, they signed in as themselves, and authorize_token() already
+    // refuses anyone without manage_options, so filtering them again by a global
+    // role meant an administrator on Claude Desktop silently lost every
+    // admin-level tool with no visible reason and no setting on screen to explain
+    // it (the selector only appears when a bearer token is configured).
+    if ( $this->role_filter_applies() ) {
       $filtered_tools = array_filter( $filtered_tools, function ( $tool ) {
         $level = $tool['accessLevel'] ?? 'admin';
         return $this->role_has_access( $level );
@@ -1059,7 +1087,7 @@ class Meow_MWAI_Labs_MCP {
 
       // Defense in depth: verify tool access even if it wasn't filtered from the listing
       $tool_level = $this->tool_access_levels[ $tool ] ?? 'admin';
-      if ( !$this->role_has_access( $tool_level ) ) {
+      if ( $this->role_filter_applies() && !$this->role_has_access( $tool_level ) ) {
         $error_msg = "Access denied: tool '{$tool}' requires '{$tool_level}' access.";
         $response = $this->rpc_error( $id, -32600, $error_msg );
         return $response;
@@ -1163,17 +1191,17 @@ class Meow_MWAI_Labs_MCP {
       // Fire the action even on access denials and errors so admins can see
       // attempted-but-blocked tool calls in MCP Logs.
       do_action( 'mwai_mcp_tool_called', [
-        'tool'         => $tool,
-        'args'         => $args,
-        'result'       => $response,
-        'status'       => $status,
-        'error_msg'    => $error_msg,
-        'duration_ms'  => $duration_ms,
-        'client_id'    => $this->auth_client_id,
-        'client_name'  => $this->auth_client_name,
-        'auth_method'  => $this->auth_method,
-        'request_id'   => $id,
-        'user_id'      => get_current_user_id(),
+        'tool' => $tool,
+        'args' => $args,
+        'result' => $response,
+        'status' => $status,
+        'error_msg' => $error_msg,
+        'duration_ms' => $duration_ms,
+        'client_id' => $this->auth_client_id,
+        'client_name' => $this->auth_client_name,
+        'auth_method' => $this->auth_method,
+        'request_id' => $id,
+        'user_id' => get_current_user_id(),
       ] );
     }
   }

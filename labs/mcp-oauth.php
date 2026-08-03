@@ -18,6 +18,23 @@ if ( !defined( 'ABSPATH' ) ) {
  */
 class Meow_MWAI_Labs_MCP_OAuth {
   public const DB_VERSION = '1.0.0';
+  /**
+  * States of the `revoked` column on a token row.
+  *
+  * ROTATED exists because a refresh must not kill the access token that was issued
+  * alongside the refresh token. Clients refresh before they switch over, and some
+  * keep using the previous access token for a while afterwards. Revoking the whole
+  * row at that moment made a token with up to an hour of life left start returning
+  * 401 mid-conversation, which clients report as "this connector requires
+  * additional permissions, reconnect it" and which reconnecting never fixes,
+  * because the next refresh does the same thing again. It looks random, it is
+  * entirely server-side, and it has nothing to do with the host.
+  *
+  * A rotated row can no longer refresh, but its access token stays valid until it
+  * expires on its own. REVOKED still means what it says: both halves die at once.
+  */
+  private const TOKEN_REVOKED = 1;
+  private const TOKEN_ROTATED = 2;
   public const ACCESS_TOKEN_TTL = 3600;       // 1 hour
   public const REFRESH_TOKEN_TTL = 2592000;   // 30 days
   public const AUTH_CODE_TTL = 60;            // seconds
@@ -626,13 +643,15 @@ class Meow_MWAI_Labs_MCP_OAuth {
       return $this->oauth_error( 'invalid_client', 'Client authentication failed.', 401 );
     }
 
-    // Refresh-token rotation (OAuth 2.1 best practice): revoke the old grant and issue a new pair.
-    $wpdb->update( $this->table_tokens, [ 'revoked' => 1 ], [ 'id' => $row->id ] );
+    // Refresh-token rotation (OAuth 2.1 best practice): the old refresh token is
+    // spent, but the access token issued with it is NOT. See TOKEN_ROTATED.
+    $wpdb->update( $this->table_tokens, [ 'revoked' => self::TOKEN_ROTATED ], [ 'id' => $row->id ] );
 
     if ( $this->logging ) {
       error_log( '[AI Engine MCP OAuth] ✅ Refresh accepted for token ' . $marker
         . ', user ' . (int) $row->user_id . ', client ' . $client->client_id
-        . '. Old grant revoked, new pair issued.' );
+        . '. New pair issued; the previous access token stays valid until '
+        . $row->access_expires . ' UTC.' );
     }
 
     return $this->issue_token_pair( $row->client_id, (int) $row->user_id, (string) $row->scope );
@@ -757,18 +776,39 @@ class Meow_MWAI_Labs_MCP_OAuth {
     }
     global $wpdb;
     $hash = hash( 'sha256', $token );
+    // Rotated grants still serve their access token; only an explicit revocation
+    // kills it on the spot.
     $row = $wpdb->get_row(
       $wpdb->prepare(
         "SELECT t.*, c.client_name FROM {$this->table_tokens} t
          LEFT JOIN {$this->table_clients} c ON c.client_id = t.client_id
-         WHERE t.access_token_hash = %s AND t.revoked = 0 LIMIT 1",
-        $hash
+         WHERE t.access_token_hash = %s AND t.revoked <> %d LIMIT 1",
+        $hash,
+        self::TOKEN_REVOKED
       )
     );
+    // A rejected token used to be silent, which made "it works, then it doesn't"
+    // reports impossible to answer: nothing anywhere said why. Each branch below
+    // names the reason, and the marker lets one client's calls be followed across
+    // a log without ever writing a usable credential to disk.
     if ( !$row ) {
+      if ( $this->logging ) {
+        $marker = $this->token_marker( $token );
+        $revoked = $wpdb->get_var( $wpdb->prepare(
+          "SELECT id FROM {$this->table_tokens} WHERE access_token_hash = %s LIMIT 1",
+          $hash
+        ) );
+        error_log( '[AI Engine MCP OAuth] ❌ Access token ' . $marker . ' rejected: ' . ( $revoked
+          ? 'this grant was revoked (from Connected Apps, or by the client signing out).'
+          : 'no grant matches this token. The client is using a credential this site never issued, or one whose grant has been deleted.' ) );
+      }
       return null;
     }
     if ( strtotime( $row->access_expires . ' UTC' ) < time() ) {
+      if ( $this->logging ) {
+        error_log( '[AI Engine MCP OAuth] ❌ Access token ' . $this->token_marker( $token )
+          . ' rejected: it expired on ' . $row->access_expires . ' UTC. The client should refresh it.' );
+      }
       return null;
     }
     // Touch last_used (non-blocking, single UPDATE).
