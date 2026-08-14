@@ -848,6 +848,29 @@ i18n.ERROR = {
   CONNECTION_FAILED: __( 'Failed to establish connection with OpenAI servers. Please try again.', 'ai-engine' ),
 };
 
+// SEO block in the Modules tab
+i18n.SEO_BLOCK = {
+  TITLE: __( 'SEO', 'ai-engine' ),
+  INTRO: __( 'How your site looks to search engines, and to AI.', 'ai-engine' ),
+  DISCOURAGED: __( 'Search engines are discouraged in Settings → Reading, so every crawler is blocked.', 'ai-engine' ),
+  SHOW_ALL: __( 'Show all', 'ai-engine' ),
+  SHOW_LESS: __( 'Show less', 'ai-engine' ),
+  VIEW: __( 'View ↗', 'ai-engine' ),
+  EDIT: __( 'Edit', 'ai-engine' ),
+  TILE_BOT_VISITS: __( 'AI bot visits', 'ai-engine' ),
+  TILE_AI_VISIBILITY: __( 'AI visibility', 'ai-engine' ),
+  TILE_TOP_BOTS: __( 'Top AI bots', 'ai-engine' ),
+  REASON_NOT_INSTALLED: __( 'SEO Engine tracks this', 'ai-engine' ),
+  REASON_NO_DATA: __( 'No data yet', 'ai-engine' ),
+  REASON_PRO_REQUIRED: __( 'SEO Engine Pro', 'ai-engine' ),
+  REASON_GENERIC: __( 'Not measured yet', 'ai-engine' ),
+  FOOTER_ABSENT_PREFIX: __( 'Not measured yet. SEO Engine tracks these, and it\'s', 'ai-engine' ),
+  FOOTER_ABSENT_LINK: __( 'free on WordPress.org', 'ai-engine' ),
+  FOOTER_PRESENT: __( 'Tracked by SEO Engine.', 'ai-engine' ),
+  OPEN_SEO_ENGINE: __( 'Open SEO Engine →', 'ai-engine' ),
+  SEO_ENGINE_URL: 'https://wordpress.org/plugins/seo-engine/?utm_source=ai-engine&utm_medium=modules&utm_campaign=seo-block',
+};
+
 // Console/debug messages
 i18n.DEBUG = {
   CRASH_IN_MARKDOWN: __( 'Crash in markdown-to-jsx! Reverting to plain text.', 'ai-engine' ),

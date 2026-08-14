@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 3.7.0
+Stable tag: 3.7.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -295,11 +295,20 @@ Report security vulnerabilities through the [Patchstack Vulnerability Disclosure
 
 == Changelog ==
 
+= 3.7.1 (2026/08/14) =
+* Add: WPML support in the MCP server, mirroring the Polylang tools.
+* Add: SEO section in the Modules tab, with robots.txt access for AI crawlers and live stats when SEO Engine is installed.
+* Update: MCP self-test now detects AI-crawler blocking, nested .htaccess files and www mismatches, and logs every OAuth authorize refusal.
+* Update: Internal errors are now hidden behind a filterable public message, and AI Forms no longer show provider errors to visitors.
+* Update: Shared dashboard synced with the new Board and the AI site analysis.
+* Fix: The mwai_mcp_mutate hook now fires on deletions, so cache purges hooked to it run.
+
 = 3.7.0 (2026/08/03) =
 * Fix: Qdrant collections were always created with 1536 dimensions regardless of the embedding model, and default dimensions are now read from the right place.
 * Update: Embedding dimensions are no longer locked for OpenAI-compatible models, as that size is only a guess.
 * Fix: The MCP access level no longer restricts OAuth connections, and the setting is no longer hidden behind the bearer token.
 * Fix: MCP connections no longer drop at random when the client refreshes its access token.
+* Update: Credited Revanth Hari Narayana Matte (via WPScan) for reporting the security issues fixed in 3.6.4 and 3.6.6.
 
 = 3.6.9 (2026/08/01) =
 * Fix: Crash when clicking quickly through discussions, and slow image checks writing into the wrong message.

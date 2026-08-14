@@ -2447,15 +2447,31 @@ class Meow_MWAI_Labs_MCP_Core {
     return $r;
   }
 
+  /**
+  * The only "admin" tools that do not change anything. Everything else at that level
+  * does, including all five delete tools.
+  *
+  * This is a list of exceptions rather than a list of mutating tools, and that is
+  * deliberate. It used to name the mutating ones, which meant every delete tool was
+  * missing and mwai_mcp_mutate never fired on a deletion: anyone using the hook to
+  * purge a full-page cache kept serving deleted posts. Listing the reads instead
+  * makes the failure mode a needless cache purge rather than a silently stale page,
+  * and a new admin tool is covered the day it is added instead of the day someone
+  * notices.
+  */
+  private const NON_MUTATING_ADMIN_TOOLS = [ 'wp_get_users', 'wp_get_option' ];
+
   // Whether a tool changes site state (so the mwai_mcp_mutate hook should fire).
-  // Anything declared accessLevel "write" mutates; a few "admin" tools mutate too
-  // (the rest, e.g. wp_get_option, are reads).
   private function is_mutating_tool( string $tool ): bool {
     $defs = $this->tools();
-    if ( ( $defs[ $tool ]['accessLevel'] ?? '' ) === 'write' ) {
+    $level = $defs[ $tool ]['accessLevel'] ?? '';
+    if ( $level === 'write' ) {
       return true;
     }
-    return in_array( $tool, [ 'wp_update_option', 'wp_create_user', 'wp_update_user' ], true );
+    if ( $level === 'admin' ) {
+      return !in_array( $tool, self::NON_MUTATING_ADMIN_TOOLS, true );
+    }
+    return false;
   }
   #endregion
 }

@@ -2025,6 +2025,31 @@ class Meow_MWAI_Rest {
       $post_reference_args['user-agent'] = 'AI-Engine-Self-Test/1.0';
       $post_reference = $build( $resource_url, wp_remote_post( $resource_url, $post_reference_args ) );
 
+      // Stage 3: the name the real connector sends. Claude.ai identifies itself as
+      // Claude-User, and Cloudflare's AI bot blocking (Security > Bots) matches that
+      // name alongside ClaudeBot and GPTBot. A site can pass every python-httpx probe
+      // above and still 403 the actual connector, so probe the crawler name too,
+      // against the URL the reference has already proven answers fine.
+      $ai_args = $reference_args;
+      $ai_args['user-agent'] = 'Claude-User/1.0';
+      $ai_probe = $build( $reference_url, wp_remote_get( $reference_url, $ai_args ) );
+      $ai_blocked = $reference['reachable'] && (
+        !$ai_probe['reachable']
+        || ( $ai_probe['status'] !== $reference['status']
+          && in_array( $ai_probe['status'], [ 403, 406, 418, 429 ], true ) )
+      );
+
+      // We run on the server, so we can answer directly what an HTTP probe can only infer:
+      // is there a second .htaccess inside .well-known? Apache does not apply the rewrite
+      // rules of the root file to a directory carrying its own .htaccess, so a perfectly
+      // correct rule in the main file sits there doing nothing, and the user has no way to
+      // see why. Hosts create that folder for SSL certificate renewals.
+      $nested_htaccess = false;
+      $wellknown_htaccess = ABSPATH . '.well-known/.htaccess';
+      if ( @is_dir( ABSPATH . '.well-known' ) && @is_file( $wellknown_htaccess ) ) {
+        $nested_htaccess = $wellknown_htaccess;
+      }
+
       $is_json = function ( $probe ) {
         return $probe['content_type'] && strpos( $probe['content_type'], 'json' ) !== false;
       };
@@ -2037,15 +2062,44 @@ class Meow_MWAI_Rest {
         || ( $is_json( $post_reference ) && !$is_json( $post_probe ) )
       ) );
 
+      // A 404 on discovery has two very different causes, and they need opposite fixes.
+      // Either the hosting layer never lets the path reach WordPress, or a page cache
+      // stored a 404 from a moment when it legitimately was one (the plugin inactive,
+      // mid-update) and now serves that hit forever. Repeating the request with a
+      // throwaway query string separates them: same path, different cache key. If the
+      // busted request answers properly, WordPress was always fine and the cache is the
+      // problem. Seen on LiteSpeed, which returns x-litespeed-cache: hit on the stale
+      // 404 while honouring our no-cache headers on the fresh response.
+      $cache_probe = null;
+      if ( $probe['reachable'] && $probe['status'] === 404 ) {
+        $busted_url = add_query_arg( 'mwai_cb', (string) time(), $probe_url );
+        $cache_probe = $build( $busted_url, wp_remote_get( $busted_url, $args ) );
+      }
+      $stale_404_cached = $cache_probe && $cache_probe['reachable'] && $cache_probe['status'] === 200;
+
       $verdict = 'unknown';
       $message = '';
-      if ( $probe['reachable'] && $probe['status'] === 403 ) {
+      if ( $stale_404_cached ) {
+        $verdict = 'wellknown_cached_404';
+        $message = 'Your OAuth discovery path returns 404, but the same URL with a query string added returns the correct response. That means WordPress is answering fine and a cache is serving an old 404 in front of it, which is why connecting works sometimes and not others. Fix: purge your page cache and your CDN, then exclude /.well-known/ from caching. In LiteSpeed Cache that is Cache > Excludes > Do Not Cache URIs. Without the exclusion it will come back the next time a 404 gets cached.';
+      }
+      else if ( $probe['reachable'] && $probe['status'] === 403 ) {
         $verdict = 'waf_blocks_python_ua';
         $message = 'Your host returned 403 to a User-Agent containing "python" on the OAuth discovery path. Claude.ai uses python-httpx as its outbound HTTP client, so its connector will fail with "Couldn\'t reach the MCP server". This is a common default on WP Engine. Fix: add a Cloudflare Transform Rule that rewrites the User-Agent for /.well-known/oauth-* and /wp-json/mcp/v1/* paths before the request reaches your origin. See https://meowapps.com/fix-mcp-wordpress-connection for the full recipe.';
       }
       else if ( $probe['reachable'] && $probe['status'] === 404 ) {
         $verdict = 'wellknown_blocked';
-        $message = 'Your host returned 404 for the host-root /.well-known/oauth-protected-resource path. This usually means your hosting layer (.htaccess, nginx config, or a security plugin) intercepts /.well-known/* paths before WordPress sees them. Adjust rewrites so the path reaches index.php.';
+        $verdict = $nested_htaccess ? 'wellknown_blocked_nested_htaccess' : 'wellknown_blocked';
+        $message = 'Your host returned 404 for the host-root /.well-known/oauth-protected-resource path, so the request never reaches WordPress. ';
+        if ( $nested_htaccess ) {
+          $message .= 'We found why: there is a second .htaccess inside your .well-known folder, at ' . esc_html( $nested_htaccess ) . '. '
+            . 'Apache stops applying the rules from your main .htaccess to a folder that has its own, so any rewrite you add to the main file is ignored for these paths, however correct it is. '
+            . 'Your host created that folder for SSL certificate renewals. Fix: rename that file to htaccess-old. Renewals keep working, because those are real files that nothing rewrites.';
+        }
+        else {
+          $message .= 'This usually means your hosting layer (.htaccess, nginx config, or a security plugin) intercepts /.well-known/* paths before WordPress sees them. Adjust rewrites so the path reaches index.php. '
+            . 'We checked and there is no .htaccess inside your .well-known folder, so the interception is happening in your server or CDN configuration rather than in a file you can edit. Your host can fix it with one sentence: let /.well-known/* fall through to WordPress.';
+        }
       }
       else if ( !$probe['reachable'] ) {
         $verdict = 'unreachable';
@@ -2057,11 +2111,57 @@ class Meow_MWAI_Rest {
       }
       else if ( $probe['status'] === 200 ) {
         $verdict = 'ok';
-        $message = 'Your site accepts the python-httpx User-Agent on both the OAuth discovery path (GET) and the MCP endpoint (POST). Claude.ai\'s connector should be able to reach it. If connecting still fails, run the same probes from an external machine: some servers reach themselves without going through the edge firewall.';
+        $message = 'Your site accepts the python-httpx and Claude-User User-Agents on both the OAuth discovery path (GET) and the MCP endpoint (POST). Claude.ai\'s connector should be able to reach it. '
+          . 'One caveat: these checks run from your server to itself, and many hosts resolve their own domain straight to the origin, so a block that lives at your CDN can pass here and still refuse the real connector. '
+          . 'If connecting still fails, run the same requests from an external machine, and check whether your CDN blocks AI crawlers by name (in Cloudflare: Security > Bots). Blocking AI crawlers also blocks your own connector.';
       }
       else {
         $verdict = 'unexpected_status';
         $message = 'Got HTTP ' . $probe['status'] . ' from the loopback probe. Expected 200. Investigate the response in your CDN/origin logs.';
+      }
+
+      // A site that answers on both apex and www advertises only one of them in its OAuth
+      // metadata, because everything there is built from home_url(). A user who types the
+      // other spelling gets told the resource lives on a different origin than the one they
+      // entered, which RFC 9728 requires the client to check, and strict clients stop there
+      // with no error the user can see. Cheap to detect, impossible to guess from outside.
+      $canonical_host = wp_parse_url( home_url(), PHP_URL_HOST );
+      $other_host = $canonical_host && strpos( $canonical_host, 'www.' ) === 0
+        ? substr( $canonical_host, 4 ) : 'www.' . $canonical_host;
+      $other_probe = null;
+      if ( $canonical_host ) {
+        $other_url = str_replace( '//' . $canonical_host, '//' . $other_host, $reference_url );
+        // Do NOT follow redirects here. A site that correctly sends www to its canonical
+        // host would otherwise answer 200 at the end of the redirect and look exactly like
+        // a site serving both, which is the opposite of the problem we are looking for.
+        // Only a direct 200 on the other spelling means both hosts really serve the site.
+        $other_args = $reference_args;
+        $other_args['redirection'] = 0;
+        $other_probe = $build( $other_url, wp_remote_get( $other_url, $other_args ) );
+      }
+      if ( $other_probe && $other_probe['reachable'] && $other_probe['status'] === 200 ) {
+        $message .= ' Also worth knowing: your site answers on both ' . esc_html( $canonical_host )
+          . ' and ' . esc_html( $other_host ) . ', but its OAuth metadata only ever advertises '
+          . esc_html( $canonical_host ) . ', because that is your WordPress address. '
+          . 'Connect your client using exactly that spelling, otherwise it is told the server lives somewhere else and may refuse without explaining why.';
+      }
+
+      // Reported on top of whatever else is wrong, because it is a separate blocker with a
+      // separate fix: a site can have perfect discovery and still refuse the connector.
+      if ( $ai_blocked ) {
+        $ai_message = 'Your site answers the OAuth discovery URL normally to a neutral User-Agent but returns HTTP '
+          . ( $ai_probe['reachable'] ? $ai_probe['status'] : 'no response' )
+          . ' to "Claude-User". That is the name Claude.ai\'s connector sends, so it will be refused even once everything else works. '
+          . 'The usual cause is Cloudflare\'s AI bot blocking (Security > Bots), which matches Claude-User, ClaudeBot and GPTBot. '
+          . 'Fix: turn that off, or add a skip rule covering /.well-known/oauth-* and /wp-json/mcp/v1/*. '
+          . 'Note that blocking AI crawlers also blocks your own connector.';
+        if ( $verdict === 'ok' ) {
+          $verdict = 'waf_blocks_ai_ua';
+          $message = $ai_message;
+        }
+        else {
+          $message .= ' ' . $ai_message;
+        }
       }
 
       return $this->create_rest_response( [
@@ -2072,6 +2172,9 @@ class Meow_MWAI_Rest {
         'reference' => $reference,
         'post_probe' => $post_probe,
         'post_reference' => $post_reference,
+        'ai_probe' => $ai_probe,
+        'nested_htaccess' => $nested_htaccess,
+        'cache_probe' => $cache_probe,
       ], 200 );
     }
     catch ( Exception $e ) {

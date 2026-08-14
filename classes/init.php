@@ -123,3 +123,11 @@ require_once( MWAI_PATH . '/common/helpers.php' );
 
 global $mwai_core;
 $mwai_core = new Meow_MWAI_Core();
+
+// Registered here rather than from the MCP module: on activation WordPress includes
+// the plugin after plugins_loaded has already fired, so no module instance exists to
+// hook it. See purge_discovery_cache() for why an activation needs to purge at all.
+register_activation_hook( MWAI_ENTRY, function () {
+  require_once MWAI_PATH . '/labs/mcp-oauth.php';
+  Meow_MWAI_Labs_MCP_OAuth::purge_discovery_cache();
+} );

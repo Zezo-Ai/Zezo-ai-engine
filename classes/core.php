@@ -177,6 +177,11 @@ class Meow_MWAI_Core {
         new MeowPro_MWAI_MCP_Polylang( $this );
       }
 
+      // WPML - Pro multilingual MCP tools (only if WPML is active)
+      if ( $this->get_option( 'mcp_wpml' ) && class_exists( 'MeowPro_MWAI_MCP_Wpml' ) && defined( 'ICL_SITEPRESS_VERSION' ) ) {
+        new MeowPro_MWAI_MCP_Wpml( $this );
+      }
+
       // WooCommerce - Pro WooCommerce store management MCP tools (only if WooCommerce is active)
       if ( $this->get_option( 'mcp_woocommerce' ) && class_exists( 'MeowPro_MWAI_MCP_WooCommerce' ) && class_exists( 'WooCommerce' ) ) {
         new MeowPro_MWAI_MCP_WooCommerce( $this );
@@ -931,6 +936,19 @@ class Meow_MWAI_Core {
 
   #endregion
 
+  #region Errors
+
+  // The message visitors get when something breaks internally (a provider failure, a
+  // function-call issue, a stream error). The real error is always logged, and admins
+  // still see it; visitors only ever get this. Filterable so a site can match its own
+  // tone and so a raw provider message (billing, quota, model errors) never leaks.
+  public static function get_public_error_message( $exception = null ) {
+    $message = 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.';
+    return apply_filters( 'mwai_public_error_message', $message, $exception );
+  }
+
+  #endregion
+
   #region Streaming
   public function stream_push( $data, $query = null ) {
     try {
@@ -950,7 +968,7 @@ class Meow_MWAI_Core {
     }
     catch ( Exception $e ) {
       // Send error as proper SSE error event
-      $errorMessage = 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.';
+      $errorMessage = self::get_public_error_message( $e );
       error_log( '[AI Engine Stream Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
 
       $errorData = [
@@ -1616,6 +1634,16 @@ class Meow_MWAI_Core {
     }
     unset( $addon );
 
+    // SEO stats. Filled by SEO Engine when it is active; null otherwise. AI Engine knows
+    // nothing about SEO Engine's internals, exactly like the addons list above.
+    // Admin-only: this feeds the Modules tab, and the provider filter may run SQL, so it
+    // must never fire on guest-facing requests (get_option() rebuilds this payload often).
+    // Guard on wp_get_current_user, not current_user_can: the core is constructed while
+    // plugins load, before pluggable.php exists, and current_user_can calls into it.
+    $can_admin = function_exists( 'wp_get_current_user' ) && current_user_can( 'manage_options' );
+    $options['seo_stats'] = $can_admin ? apply_filters( 'mwai_seo_stats', null ) : null;
+    $options['seo_robots'] = $can_admin ? $this->get_ai_crawler_access() : null;
+
     // Populate usage data from ai_usage to ai_models_usage for the frontend
     $ai_usage = $this->get_option( 'ai_usage', [] );
     $options['ai_models_usage'] = $ai_usage;
@@ -1626,6 +1654,113 @@ class Meow_MWAI_Core {
 
     $populating = false;
     return $options;
+  }
+
+  // Reports whether the well-known AI crawlers are allowed by robots.txt. Local reads only:
+  // fetching home_url( '/robots.txt' ) over HTTP would be slow on an admin screen and fails
+  // on hosts that block loopback requests.
+  public function get_ai_crawler_access() {
+    $public = get_option( 'blog_public' );
+    $discouraged = (string) $public === '0';
+    $has_file = file_exists( ABSPATH . 'robots.txt' );
+    $mtime = $has_file ? ( filemtime( ABSPATH . 'robots.txt' ) ?: null ) : null;
+
+    // The cache is only trusted while its cheap fingerprints still match, so editing
+    // robots.txt (SEO plugin, FTP) or toggling "Discourage search engines" shows up
+    // immediately instead of after the transient expires.
+    $cached = get_transient( 'mwai_ai_crawler_access' );
+    if ( is_array( $cached ) && array_key_exists( 'mtime', $cached )
+      && $cached['mtime'] === $mtime && $cached['discouraged'] === $discouraged ) {
+      return $cached;
+    }
+
+    $bots = [ 'GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended', 'CCBot',
+      'Applebot-Extended', 'meta-externalagent', 'Bytespider' ];
+    $source = 'virtual';
+    $content = '';
+
+    if ( $has_file ) {
+      $source = 'file';
+      $content = (string) file_get_contents( ABSPATH . 'robots.txt' );
+    }
+    else {
+      // WordPress only serves a virtual robots.txt when no physical file exists. Rebuild
+      // what it actually serves (do_robots() echoes, so replicate its default) and run the
+      // robots_txt filter so SEO plugins hooking it are reflected.
+      $site_url = wp_parse_url( site_url() );
+      $path = !empty( $site_url['path'] ) ? $site_url['path'] : '';
+      $default = "User-agent: *\n";
+      $default .= "Disallow: $path/wp-admin/\n";
+      $default .= "Allow: $path/wp-admin/admin-ajax.php\n";
+      $content = apply_filters( 'robots_txt', $default, $public );
+    }
+
+    $access = [
+      'discouraged' => $discouraged,
+      'source' => $source,
+      'mtime' => $mtime,
+      'bots' => $this->parse_robots_for_bots( $content, $bots, $discouraged ),
+    ];
+
+    set_transient( 'mwai_ai_crawler_access', $access, HOUR_IN_SECONDS );
+    return $access;
+  }
+
+  private function parse_robots_for_bots( $content, $bots, $discouraged ) {
+    $access = [];
+
+    // Settings > Reading > "Discourage search engines" overrides everything.
+    if ( $discouraged ) {
+      foreach ( $bots as $bot ) {
+        $access[$bot] = 'blocked';
+      }
+      return $access;
+    }
+
+    // Group the rules: consecutive User-agent lines share the record that follows.
+    $groups = [];
+    $agents = [];
+    $collecting = true;
+    $lines = preg_split( '/\r\n|\r|\n/', $content );
+    foreach ( $lines as $line ) {
+      $line = trim( preg_replace( '/#.*$/', '', $line ) );
+      if ( $line === '' ) {
+        continue;
+      }
+      if ( preg_match( '/^user-agent\s*:\s*(.+)$/i', $line, $m ) ) {
+        if ( !$collecting ) {
+          $agents = [];
+          $collecting = true;
+        }
+        $agent = strtolower( trim( $m[1] ) );
+        $agents[] = $agent;
+        // Register the group even if it only ever gets Allow lines, so a bot with its
+        // own (permissive) group never falls back to a blocking * group.
+        if ( !isset( $groups[$agent] ) ) {
+          $groups[$agent] = [];
+        }
+      }
+      else if ( preg_match( '/^disallow\s*:\s*(.*)$/i', $line, $m ) ) {
+        $collecting = false;
+        $rule = trim( $m[1] );
+        foreach ( $agents as $agent ) {
+          $groups[$agent][] = $rule;
+        }
+      }
+      else {
+        // Allow, Sitemap, Crawl-delay… end the User-agent run but keep the group.
+        $collecting = false;
+      }
+    }
+
+    foreach ( $bots as $bot ) {
+      $key = strtolower( $bot );
+      $rules = isset( $groups[$key] ) ? $groups[$key] :
+        ( isset( $groups['*'] ) ? $groups['*'] : [] );
+      // Only a full "Disallow: /" counts as blocked; narrower paths leave the site readable.
+      $access[$bot] = in_array( '/', $rules, true ) ? 'blocked' : 'allowed';
+    }
+    return $access;
   }
 
   public function get_all_options( $force = false, $sanitize = false ) {

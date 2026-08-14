@@ -84,6 +84,15 @@ with that core direction.
 - [ ] **Ignored-param sweep** — audit every read tool for accepted-but-silently-ignored or
       expected-but-missing params; wire them up or document them. (This session fixed 3 such bugs.)
 - [ ] **Bulk writes** — batch post / meta / term update (only WooCommerce has batch today).
+- [ ] **`outputSchema` on the tools** — ChatGPT's plugin UI badges our tools "OUTPUT SCHEMA
+      RECOMMENDED" (observed 2026-08-09 on `mcp_ping`). Only 6 of 115 tools declare one, all in
+      `labs/mcp-rest.php`; the rest have none (42 in `mcp-core.php`, 25 Woo, 13 plugin, 13 theme,
+      11 Polylang). **Not a metadata-only change**: per the MCP spec, a tool declaring
+      `outputSchema` must return `structuredContent` matching it, and clients validate. We return
+      `structuredContent` nowhere, so declaring schemas without changing the return path would
+      break strict clients on every call. The existing 6 look mis-declared for the same reason
+      (they describe the `content` array). Do it as one deliberate pass: return path first,
+      schemas second, and fix those 6 while there.
 - [ ] **SSE fail-fast** — when no API key is configured, SSE should error clearly instead of hanging.
       (Largely moot once legacy SSE is removed; see memory `project_mcp_sse_removal`, ~2026-07-01.)
 

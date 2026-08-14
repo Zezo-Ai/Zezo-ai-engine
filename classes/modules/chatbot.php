@@ -271,7 +271,7 @@ class Meow_MWAI_Modules_Chatbot {
         $errorData = [
           'type' => 'error',
           'data' => ( $isRefusal || current_user_can( 'manage_options' ) ) ? $message
-            : 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.',
+            : Meow_MWAI_Core::get_public_error_message( $e ),
           'overLimit' => $overLimit
         ];
         echo 'data: ' . json_encode( $errorData ) . "\n\n";
@@ -289,7 +289,7 @@ class Meow_MWAI_Modules_Chatbot {
       // is logged); admins still see it so they can debug.
       if ( !$isRefusal && !current_user_can( 'manage_options' ) ) {
         error_log( '[AI Engine Chatbot Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
-        $message = 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.';
+        $message = Meow_MWAI_Core::get_public_error_message( $e );
       }
       return $this->create_rest_response( [
         'success' => false,
@@ -1138,7 +1138,7 @@ class Meow_MWAI_Modules_Chatbot {
         $overLimit = $isRefusal && $e->reason === 'limits';
         if ( !$isRefusal && !current_user_can( 'manage_options' ) ) {
           error_log( '[AI Engine Chatbot Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
-          $message = 'Oops! Something went wrong on the server. Please try again, and if you are the site developer, check the PHP Error Logs for details.';
+          $message = Meow_MWAI_Core::get_public_error_message( $e );
         }
         $this->core->stream_push( [
           'type' => 'error',

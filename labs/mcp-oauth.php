@@ -97,6 +97,34 @@ class Meow_MWAI_Labs_MCP_OAuth {
     }
   }
 
+  /**
+  * Purge the OAuth discovery URLs from whatever page cache sits in front of WordPress.
+  *
+  * A cache that stored a 404 for these paths keeps serving it long after the plugin
+  * can answer properly, and the way sites get into that state is the plugin being
+  * inactive for a moment: an update, or a manual deactivation. Our no-cache headers
+  * cannot help, because our code is not running when that 404 is produced, and the
+  * result is an MCP connection that fails intermittently for days with nothing wrong
+  * on the site. Purging the two URLs the moment we come back is the only cure.
+  *
+  * Static, and called from a real activation hook, because during activation
+  * WordPress includes the plugin long after plugins_loaded has fired, so none of the
+  * usual module instances exist yet.
+  *
+  * LiteSpeed is handled directly, since that is where this was diagnosed. Any other
+  * cache can listen to mwai_mcp_purge_discovery_urls, which carries the same list.
+  */
+  public static function purge_discovery_cache() {
+    $urls = [
+      home_url( '/.well-known/oauth-protected-resource' ),
+      home_url( '/.well-known/oauth-authorization-server' ),
+    ];
+    foreach ( $urls as $url ) {
+      do_action( 'litespeed_purge_url', $url );
+    }
+    do_action( 'mwai_mcp_purge_discovery_urls', $urls );
+  }
+
   private function emit_json( $payload ) {
     status_header( 200 );
     nocache_headers();
@@ -350,6 +378,8 @@ class Meow_MWAI_Labs_MCP_OAuth {
       error_log( '[AI Engine MCP OAuth] Registered client: ' . $client_name . ' (' . $client_id . ')' );
     }
 
+    $this->prune_orphan_clients();
+
     $response = [
       'client_id' => $client_id,
       'client_name' => $client_name,
@@ -384,23 +414,44 @@ class Meow_MWAI_Labs_MCP_OAuth {
       'scope' => (string) ( $request->get_param( 'scope' ) ?? 'mcp' ),
       'code_challenge' => (string) ( $request->get_param( 'code_challenge' ) ?? '' ),
       'code_challenge_method' => (string) ( $request->get_param( 'code_challenge_method' ) ?? '' ),
+      // RFC 8707. ChatGPT and other current clients send this; we carry it through the
+      // consent POST so it survives to the token exchange. Deliberately not enforced:
+      // we expose exactly one resource, so a mismatch cannot widen a token's reach, and
+      // rejecting on it would break any client whose idea of the URL differs harmlessly
+      // (a trailing slash, www against apex). It is recorded, and logged when it differs.
+      'resource' => (string) ( $request->get_param( 'resource' ) ?? '' ),
     ];
 
+    // Log the hit itself. Without this, a client that registers and then stops is
+    // indistinguishable from a client that reached the consent screen and was refused,
+    // because every branch below only renders a page in the user's browser. That
+    // ambiguity has cost several support rounds.
+    if ( $this->logging ) {
+      error_log( '[AI Engine MCP OAuth] → GET /oauth/authorize client_id='
+        . ( $params['client_id'] ?: '(none)' ) . ' redirect_uri=' . ( $params['redirect_uri'] ?: '(none)' )
+        . ' scope=' . $params['scope'] );
+    }
+
     if ( $params['response_type'] !== 'code' ) {
+      $this->log_authorize_refusal( 'unsupported response_type: ' . ( $params['response_type'] ?: '(none)' ) );
       $this->render_error_page( 'Unsupported response_type. Only "code" is supported.' );
       exit;
     }
     if ( $params['code_challenge'] === '' || $params['code_challenge_method'] !== 'S256' ) {
+      $this->log_authorize_refusal( 'PKCE missing or not S256 (method: '
+        . ( $params['code_challenge_method'] ?: '(none)' ) . ')' );
       $this->render_error_page( 'PKCE is required: provide code_challenge and code_challenge_method=S256.' );
       exit;
     }
 
     $client = $this->get_client( $params['client_id'] );
     if ( !$client ) {
+      $this->log_authorize_refusal( 'unknown client_id ' . ( $params['client_id'] ?: '(none)' ) );
       $this->render_error_page( 'Unknown client_id. The client must register via Dynamic Client Registration first.' );
       exit;
     }
     if ( !$this->redirect_uri_registered( $client, $params['redirect_uri'] ) ) {
+      $this->log_authorize_refusal( 'redirect_uri not registered for this client: ' . $params['redirect_uri'] );
       $this->render_error_page( 'redirect_uri does not match any registered URI for this client.' );
       exit;
     }
@@ -427,6 +478,12 @@ class Meow_MWAI_Labs_MCP_OAuth {
 
     $this->render_consent_page( $client, $params, $user );
     exit;
+  }
+
+  private function log_authorize_refusal( $reason ) {
+    if ( $this->logging ) {
+      error_log( '[AI Engine MCP OAuth] ❌ Authorize refused: ' . $reason );
+    }
   }
 
   private function handle_authorize_submit( WP_REST_Request $request ) {
@@ -481,7 +538,13 @@ class Meow_MWAI_Labs_MCP_OAuth {
       'code_challenge' => $code_challenge,
       'code_challenge_method' => $code_challenge_method,
       'scope' => $scope,
+      'resource' => (string) ( $request->get_param( 'resource' ) ?? '' ),
     ];
+    if ( $this->logging && $code_data['resource'] !== ''
+      && $code_data['resource'] !== rest_url( $this->namespace . '/http' ) ) {
+      error_log( '[AI Engine MCP OAuth] Client asked for resource ' . $code_data['resource']
+        . ', we serve ' . rest_url( $this->namespace . '/http' ) . '. Accepted anyway.' );
+    }
     set_transient( $this->auth_code_key( $code ), $code_data, self::AUTH_CODE_TTL );
 
     $params = [ 'code' => $code ];
@@ -868,6 +931,29 @@ class Meow_MWAI_Labs_MCP_OAuth {
   #endregion
 
   #region Helpers
+  /**
+  * Drop client registrations that never led to anything.
+  *
+  * A client row is created before the user approves anything, so every abandoned
+  * connection attempt, every diagnostic and every reconnect leaves one behind, and
+  * nothing ever removed them. One user finished a debugging session with a dozen and
+  * no way to clear them short of SQL.
+  *
+  * Only rows with no grant at all, older than a month, are removed: a registration
+  * still waiting for its consent screen after that long is not coming back, and
+  * anything the user actually authorized is untouched whatever its age. This runs on
+  * registration, the only moment new rows appear, so it needs no schedule.
+  */
+  private function prune_orphan_clients() {
+    global $wpdb;
+    $wpdb->query( $wpdb->prepare(
+      "DELETE c FROM {$this->table_clients} c
+       LEFT JOIN {$this->table_tokens} t ON t.client_id = c.client_id
+       WHERE t.id IS NULL AND c.created < %s",
+      gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS )
+    ) );
+  }
+
   private function get_client( $client_id ) {
     if ( !is_string( $client_id ) || $client_id === '' ) {
       return null;
@@ -959,6 +1045,7 @@ class Meow_MWAI_Labs_MCP_OAuth {
       'scope' => $params['scope'],
       'code_challenge' => $params['code_challenge'],
       'code_challenge_method' => $params['code_challenge_method'],
+      'resource' => $params['resource'],
       '_mwai_nonce' => $nonce,
     ];
 
