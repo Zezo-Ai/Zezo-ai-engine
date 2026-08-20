@@ -440,7 +440,8 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
         'stream' => !is_null( $streamCallback ),
         'messages' => []
       ];
-      if ( !empty( $query->temperature ) && $this->model_supports_temperature( $query->model ) ) {
+      // Null means "not set"; 0 is a valid temperature and must still be sent.
+      if ( isset( $query->temperature ) && $this->model_supports_temperature( $query->model ) ) {
         $body['temperature'] = $query->temperature;
       }
 
@@ -656,7 +657,8 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
         $body['max_tokens'] = 4096;
       }
 
-      if ( !empty( $query->temperature ) && $this->model_supports_temperature( $query->model ) ) {
+      // Null means "not set"; 0 is a valid temperature and must still be sent.
+      if ( isset( $query->temperature ) && $this->model_supports_temperature( $query->model ) ) {
         $body['temperature'] = $query->temperature;
       }
 

@@ -759,7 +759,7 @@ class Meow_MWAI_Modules_Discussions {
       'session' => $query->session,
       'model' => $query->model,
     ];
-    if ( !empty( $query->temperature ) ) {
+    if ( isset( $query->temperature ) ) {
       $chatExtra['temperature'] = $query->temperature;
     }
     if ( !empty( $query->context ) ) {

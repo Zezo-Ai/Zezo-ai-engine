@@ -1141,10 +1141,10 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'name' => 'Claude Sonnet 5',
     'family' => 'claude-5',
     'features' => ['completion'],
-    // Standard pricing ($3/$15); Anthropic runs a $2/$10 intro through 2026-08-31.
+    // Anthropic made the $2/$10 introductory pricing permanent in August 2026.
     'price' => [
-      'in' => 3.00,
-      'out' => 15.00,
+      'in' => 2.00,
+      'out' => 10.00,
     ],
     'type' => 'token',
     'unit' => 1 / 1000000,

@@ -564,6 +564,45 @@ class Meow_MWAI_Modules_Chatbot {
       $chatbot = null;
       $customId = $params['customId'] ?? null;
 
+      // Server params (model, envId, instructions, apiKey, tools, mcpServers...)
+      // are configured server-side and only reach a request through the resolved
+      // chatbot: a registered botId, or the customId transient that a shortcode
+      // override stores. They must never be trusted from the request body, or a
+      // hand-crafted call to this public endpoint could force an expensive model,
+      // swap the environment (and its API key), or replace the system prompt on
+      // someone else's site. Callers who can configure chatbots anyway (the
+      // Workspace, admins) are exempt so their per-conversation overrides keep
+      // working. See MWAI_CHATBOT_SERVER_PARAMS and the shortcode override path.
+      //
+      // This runs BEFORE the chatbot is resolved, and that ordering is the point. The
+      // mwai_internal_chatbot filter below reads $params to build its chatbot, so when
+      // the strip ran after it the Editor Assistant had already baked a caller-supplied
+      // envId into the resolved chatbot and stripping $params afterwards was too late:
+      // a guest could still pick which environment (and API key) paid for the query.
+      // Only $customId is read before this point, and it is not a server param.
+      $allowClientServerParams = apply_filters(
+        'mwai_chatbot_allow_client_server_params',
+        $this->core->can_access_settings(),
+        $botId,
+        $params
+      );
+      if ( !$allowClientServerParams && is_array( $params ) ) {
+        foreach ( MWAI_CHATBOT_SERVER_PARAMS as $serverParam ) {
+          unset( $params[$serverParam] );
+        }
+        // The history in the body is display context, not a control channel.
+        // build_messages() appends these verbatim right after the real system
+        // prompt, so a 'system' (or 'developer'/'tool') turn smuggled in here
+        // would re-open the prompt-override hole from a second door. Keep only
+        // the user/assistant turns a real conversation is made of.
+        if ( !empty( $params['messages'] ) && is_array( $params['messages'] ) ) {
+          $params['messages'] = array_values( array_filter( $params['messages'], function ( $m ) {
+            $role = is_array( $m ) ? ( $m['role'] ?? '' ) : ( is_object( $m ) ? ( $m->role ?? '' ) : '' );
+            return in_array( $role, [ 'user', 'assistant' ], true );
+          } ) );
+        }
+      }
+
       // Custom Chatbot
       if ( $customId ) {
         $chatbot = get_transient( 'mwai_custom_chatbot_' . $customId );
@@ -590,38 +629,6 @@ class Meow_MWAI_Modules_Chatbot {
       if ( $textInputMaxLength && $this->core->safe_strlen( $newMessage ) > (int) $textInputMaxLength ) {
         Meow_MWAI_Logging::warn( 'The query was rejected - message was too long.' );
         throw new Exception( 'Sorry, your query has been rejected.' );
-      }
-
-      // Server params (model, envId, instructions, apiKey, tools, mcpServers...)
-      // are configured server-side and only reach a request through the resolved
-      // chatbot: a registered botId, or the customId transient that a shortcode
-      // override stores. They must never be trusted from the request body, or a
-      // hand-crafted call to this public endpoint could force an expensive model,
-      // swap the environment (and its API key), or replace the system prompt on
-      // someone else's site. Callers who can configure chatbots anyway (the
-      // Workspace, admins) are exempt so their per-conversation overrides keep
-      // working. See MWAI_CHATBOT_SERVER_PARAMS and the shortcode override path.
-      $allowClientServerParams = apply_filters(
-        'mwai_chatbot_allow_client_server_params',
-        $this->core->can_access_settings(),
-        $botId,
-        $params
-      );
-      if ( !$allowClientServerParams && is_array( $params ) ) {
-        foreach ( MWAI_CHATBOT_SERVER_PARAMS as $serverParam ) {
-          unset( $params[$serverParam] );
-        }
-        // The history in the body is display context, not a control channel.
-        // build_messages() appends these verbatim right after the real system
-        // prompt, so a 'system' (or 'developer'/'tool') turn smuggled in here
-        // would re-open the prompt-override hole from a second door. Keep only
-        // the user/assistant turns a real conversation is made of.
-        if ( !empty( $params['messages'] ) && is_array( $params['messages'] ) ) {
-          $params['messages'] = array_values( array_filter( $params['messages'], function ( $m ) {
-            $role = is_array( $m ) ? ( $m['role'] ?? '' ) : ( is_object( $m ) ? ( $m->role ?? '' ) : '' );
-            return in_array( $role, [ 'user', 'assistant' ], true );
-          } ) );
-        }
       }
 
       // We need to check the integrity of the messages sent by the client.

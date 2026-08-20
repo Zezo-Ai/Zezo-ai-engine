@@ -491,6 +491,52 @@ class Meow_MWAI_Core {
   }
 
   /**
+  * Resolve "." and ".." segments in a path WITHOUT touching the filesystem.
+  *
+  * Deliberately lexical, not realpath(): realpath() also resolves symlinks, and plenty
+  * of real installs symlink a folder inside uploads (shared media between sites, local
+  * dev, NFS mounts). Comparing a symlink-resolved file against a non-resolved base would
+  * reject those perfectly legitimate setups. An attacker can only inject "../" into a
+  * string, never create a symlink under uploads, so resolving the segments is exactly
+  * the check that is needed and nothing more.
+  *
+  * @param string $path
+  * @return string
+  */
+  public static function normalize_path_lexically( $path ) {
+    $path = str_replace( '\\', '/', (string) $path );
+    $isAbsolute = strpos( $path, '/' ) === 0;
+    $resolved = [];
+    foreach ( explode( '/', $path ) as $segment ) {
+      if ( $segment === '' || $segment === '.' ) {
+        continue;
+      }
+      if ( $segment === '..' ) {
+        array_pop( $resolved );
+        continue;
+      }
+      $resolved[] = $segment;
+    }
+    return ( $isAbsolute ? '/' : '' ) . implode( '/', $resolved );
+  }
+
+  /**
+  * Whether a path sits inside a base directory, once "../" segments are resolved.
+  *
+  * @param string $path
+  * @param string $base
+  * @return bool
+  */
+  public static function is_path_within( $path, $base ) {
+    $path = self::normalize_path_lexically( $path );
+    $base = rtrim( self::normalize_path_lexically( $base ), '/' );
+    if ( $base === '' || $path === '' ) {
+      return false;
+    }
+    return $path === $base || strpos( $path, $base . '/' ) === 0;
+  }
+
+  /**
   * Strip the parameters a client must never control out of a REST payload.
   *
   * Nulling a local $path inside a route handler is not enough: the raw params array is

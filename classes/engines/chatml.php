@@ -253,7 +253,8 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
         $body['max_completion_tokens'] = $query->maxTokens;
       }
 
-      if ( !empty( $query->temperature ) ) {
+      // Null means "not set"; 0 is a valid temperature and must still be sent.
+      if ( isset( $query->temperature ) ) {
         // GPT-5 and o1 models don't support temperature parameter
         if ( !$this->is_o1_model( $query->model ) && !$this->is_gpt5_model( $query->model ) ) {
           $body['temperature'] = $query->temperature;

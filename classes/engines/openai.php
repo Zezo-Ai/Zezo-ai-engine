@@ -335,7 +335,8 @@ class Meow_MWAI_Engines_OpenAI extends Meow_MWAI_Engines_ChatML {
         // Handle temperature parameter - GPT-5 and o-series reasoning models
         // reject it (the Chat Completions path in chatml.php does the same via
         // is_o1_model; this is the Responses API equivalent).
-        if ( !empty( $query->temperature ) && $query->temperature !== 1 ) {
+        // Null means "not set"; 0 is a valid temperature and must still be sent.
+        if ( isset( $query->temperature ) ) {
           $modelInfo = $this->retrieve_model_info( $query->model );
           $modelTags = !empty( $modelInfo['tags'] ) ? $modelInfo['tags'] : [];
           $noTemperature = strpos( $query->model, 'gpt-5' ) === 0 ||
@@ -2135,17 +2136,10 @@ class Meow_MWAI_Engines_OpenAI extends Meow_MWAI_Engines_ChatML {
 
         // If we couldn't find content in output, try other locations
         if ( empty( $content ) ) {
-          if ( isset( $data['text'] ) ) {
-            if ( is_string( $data['text'] ) ) {
-              $content = $data['text'];
-            }
-            elseif ( is_array( $data['text'] ) ) {
-              // Only implode if it's an array of strings, not complex structures
-              $textParts = array_filter( $data['text'], 'is_string' );
-              if ( !empty( $textParts ) ) {
-                $content = implode( '', $textParts );
-              }
-            }
+          // Note: when 'text' is an array, it's the echoed request config ({format, verbosity}),
+          // never output. Imploding it leaked "medium" (GPT-5 verbosity) into image-only replies.
+          if ( isset( $data['text'] ) && is_string( $data['text'] ) ) {
+            $content = $data['text'];
           }
           elseif ( isset( $data['content'] ) ) {
             if ( is_array( $data['content'] ) && isset( $data['content'][0]['text'] ) ) {

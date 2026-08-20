@@ -4,7 +4,7 @@ class Meow_MWAI_Query_DroppedFile {
   private $data;
   private $rawData;
   private $type; // Defines what the data is about ('refId', 'url', or 'data')
-  private $purpose; // Can be 'assistant', 'vision' or 'files' => this needs to be checked
+  private $purpose; // 'analysis' or 'generated'
   private $mimeType; // 'image/jpeg' or any other mime type
   private $fileId; // The ID of the file in the database
   public $originalPath; // The original file path (for files loaded from disk)
@@ -85,26 +85,9 @@ class Meow_MWAI_Query_DroppedFile {
     return new Meow_MWAI_Query_DroppedFile( $fileId, 'provider_file_id', $purpose, $mimeType );
   }
 
-  /**
-   * @deprecated Use from_provider_file_id() instead
-   * TODO: Remove after March 2026 - Legacy method
-   */
-  public static function from_openai_file_id( $fileId, $purpose, $mimeType = null ) {
-    return self::from_provider_file_id( $fileId, $purpose, $mimeType );
-  }
-
   public function __construct( $data, $type, $purpose, $mimeType = null, $fileId = null ) {
-    // TODO: Remove after March 2026 - Legacy type support
-    if ( $type === 'openai_file_id' ) {
-      $type = 'provider_file_id';
-    }
     if ( !empty( $type ) && $type !== 'refId' && $type !== 'url' && $type !== 'data' && $type !== 'provider_file_id' ) {
       throw new Exception( 'AI Engine: The file type can only be refId, url, data, or provider_file_id.' );
-    }
-    // TODO: Remove after March 2026 - Legacy purpose mapping
-    $legacyPurposes = [ 'vision', 'files', 'transcription', 'code_execution', 'assistant-in' ];
-    if ( in_array( $purpose, $legacyPurposes, true ) ) {
-      $purpose = 'analysis';
     }
     if ( !empty( $purpose ) && $purpose !== 'analysis' && $purpose !== 'generated' ) {
       throw new Exception( 'AI Engine: The file purpose can only be analysis or generated.' );
@@ -171,6 +154,26 @@ class Meow_MWAI_Query_DroppedFile {
         if ( strpos( $normalized_url, $normalized_upload_url ) === 0 ) {
           $local_path = str_replace( $normalized_upload_url, $upload_dir['basedir'], $normalized_url );
           $local_path = Meow_MWAI_Core::sanitize_file_path( $local_path );
+
+          // The mapping above is pure string substitution, so the URL decides the rest of
+          // the path: "/uploads/../../wp-config.php" mapped straight out of the uploads
+          // folder and the bytes were then forwarded to the configured provider under the
+          // real filename. sanitize_file_path() cannot catch this - it only matches stream
+          // wrappers at offset 0, and after the substitution the string always begins with
+          // the uploads basedir, so it can never fire here.
+          //
+          // Resolve the "../" segments and require the result to stay under uploads. A
+          // traversal that stays inside (".../2024/../2023/x.jpg") still resolves fine, so
+          // no legitimate URL is affected. Reject rather than fall through to the HTTP
+          // fetch below, otherwise a blocked traversal is simply retried as a request.
+          $local_path = Meow_MWAI_Core::normalize_path_lexically( $local_path );
+          if ( !Meow_MWAI_Core::is_path_within( $local_path, $upload_dir['basedir'] ) ) {
+            throw new Exception( 'AI Engine: This file cannot be accessed.' );
+          }
+
+          // A missing file is NOT an error here: media offloaded to S3/CDN keeps the local
+          // uploads baseurl while no local copy exists. Those must keep falling through to
+          // the HTTP fetch below, which is why only the containment failure throws.
           if ( file_exists( $local_path ) && is_readable( $local_path ) ) {
             $this->rawData = file_get_contents( $local_path );
             if ( $this->rawData !== false ) {

@@ -27,7 +27,8 @@ class Meow_MWAI_Query_Feedback extends Meow_MWAI_Query_Text implements JsonSeria
     if ( !empty( $query->maxTokens ) ) {
       $this->set_max_tokens( $query->maxTokens );
     }
-    if ( !empty( $query->temperature ) ) {
+    // Null means "not set"; 0 is a valid temperature and must survive the feedback loop.
+    if ( isset( $query->temperature ) ) {
       $this->set_temperature( $query->temperature );
     }
     if ( !empty( $query->scope ) ) {

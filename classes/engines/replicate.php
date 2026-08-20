@@ -113,7 +113,8 @@ class Meow_MWAI_Engines_Replicate extends Meow_MWAI_Engines_Core {
         $body['max_tokens'] = $query->maxTokens;
       }
 
-      if ( !empty( $query->temperature ) ) {
+      // Null means "not set"; 0 is a valid temperature and must still be sent.
+      if ( isset( $query->temperature ) ) {
         $body['temperature'] = $query->temperature;
       }
 

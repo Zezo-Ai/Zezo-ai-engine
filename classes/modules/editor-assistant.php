@@ -76,16 +76,44 @@ class Meow_MWAI_Modules_Editor_Assistant {
     echo '<div id="mwai-editor-assistant-root"></div>';
   }
 
+  /**
+  * Who may use the Assistant: exactly who the panel is shipped to.
+  *
+  * Meow_MWAI_Admin enqueues the admin bundle when can_access_features() OR
+  * can_access_settings() passes, and this pair has to mirror that, or a user gets a
+  * panel that answers 403. can_access_features() tests the role names 'editor' and
+  * 'administrator', so on its own it misses admin-equivalent accounts under another
+  * role name, which membership and security plugins create routinely. Those hold
+  * manage_options, well above what this feature needs. Sites that widened access with
+  * the mwai_allow_usage filter keep working, since can_access_features() applies it.
+  */
+  public function can_use_assistant() {
+    return $this->core->can_access_features() || $this->core->can_access_settings();
+  }
+
   public function rest_api_init() {
+    // A capability, not just a nonce. check_rest_nonce() is a bare wp_verify_nonce(), and
+    // /start_session is a public endpoint that hands a valid wp_rest nonce to anonymous
+    // visitors, so a nonce alone proved nothing about who was calling. This route accepts
+    // instructions, model and envId by design (the panel owns its system prompt and has
+    // env/model pickers), which made it an unauthenticated way to spend the site owner's
+    // provider account.
     register_rest_route( $this->namespace, '/editor/submit', [
       'methods' => 'POST',
       'callback' => [ $this, 'rest_submit' ],
-      'permission_callback' => [ $this->core, 'check_rest_nonce' ],
+      'permission_callback' => [ $this, 'can_use_assistant' ],
     ] );
   }
 
   public function get_internal_chatbot( $chatbot, $botId, $params ) {
     if ( $botId !== $this->botId ) {
+      return $chatbot;
+    }
+    // Reachable from the public chats/submit endpoint too, via the reserved "mwai_"
+    // botId prefix, which is nonce-only by design. Gate it like the Workspace does with
+    // its own internal bot: nothing in the shipped UI ever asks chats/submit for this
+    // bot, the panel calls editor/submit directly.
+    if ( !$this->can_use_assistant() ) {
       return $chatbot;
     }
     $envId = $params['envId'] ?? null;

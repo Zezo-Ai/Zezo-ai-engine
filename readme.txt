@@ -3,9 +3,9 @@ Contributors: TigrouMeow
 Tags: ai, chatbot, gpt, claude, openai
 Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 3.7.1
+Stable tag: 3.7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -294,6 +294,19 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.7.2 (2026/08/20) =
+* Fix: Editor Assistant endpoints accepted a nonce any visitor could generate, allowing anyone to run AI queries on the site's provider account (reported by Abdullah Kareem via WPScan).
+* Fix: A crafted URL could escape the uploads folder and send any server-readable file to the AI provider (reported by Jashid Sany via WPScan).
+* Fix: Editor Assistant now works for admin-equivalent accounts whose role isn't literally administrator.
+* Fix: Embeddings sharing the same reference no longer stay stuck, and a single unprocessable vector no longer blocks the maintenance queue.
+* Fix: A temperature of 0 is no longer treated as unset and stripped from the request.
+* Fix: Image-only replies from GPT-5 models no longer show "medium" as the answer text.
+* Update: Claude Sonnet 5 pricing ($2/$10 is now permanent), dashboard wording, and tested with WordPress 7.1.
+* 🎵 Discuss with others about Ai Engine on [the Discord](https://discord.gg/bHDGh38).
+* 🌴 Keep us motivated with [a little review here](https://wordpress.org/support/plugin/ai-engine/reviews/). Thank you!
+* 🥰 If you want to help us, check our [Patreon](https://www.patreon.com/meowapps). Thank you!
+* 🚀 [Click here](https://trello.com/b/8U9SdiMy/ai-engine-feature-requests) to vote for the features you want the most.
 
 = 3.7.1 (2026/08/14) =
 * Add: WPML support in the MCP server, mirroring the Polylang tools.
