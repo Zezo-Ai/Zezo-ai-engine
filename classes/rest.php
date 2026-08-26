@@ -1690,7 +1690,7 @@ class Meow_MWAI_Rest {
         $templates_option = [];
       }
 
-      // Migration: DALL-E was removed (deprecated by OpenAI). Move templates to gpt-image-1.5.
+      // Migration: DALL-E was removed (deprecated by OpenAI). Move templates to the image fallback.
       // TODO: Remove after 2027-04 (1 year after the shutdown on 2026-05-12).
       $deprecated = [ 'dall-e', 'dall-e-2', 'dall-e-3', 'dall-e-3-hd' ];
       $migrated = false;

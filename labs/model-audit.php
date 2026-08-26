@@ -22,6 +22,12 @@ $only = $args[0] ?? null;
 
 // Engines whose models come from the provider API rather than constants/models.php.
 $dynamic_types = [ 'google', 'openrouter' ];
+
+// Engines where WE build the display name from the raw id. OpenRouter hands us a curated
+// name ("Google: Gemini 3 Flash Preview") and we pass it straight through, so the name
+// heuristics below would flag every one of its models forever.
+$formats_own_names = [ 'google' ];
+
 $issues_total = 0;
 
 foreach ( (array) $core->get_option( 'ai_envs' ) as $env ) {
@@ -65,31 +71,36 @@ foreach ( (array) $core->get_option( 'ai_envs' ) as $env ) {
   }
 
   // 2. Names that clearly fell through the formatter: still carrying a raw id, or a
-  // lowercased fragment that should have become a proper word.
-  foreach ( $models as $m ) {
-    if ( $m['name'] === $m['model'] ) {
-      $issues[] = "unformatted name for {$m['model']} (name === id)";
-    }
-    else if ( preg_match( '/(preview|latest|exp|[0-9]{4}-[0-9]{2}|customtools|nano-banana)/i', $m['name'] )
-      && !preg_match( '/\(/', $m['name'] ) ) {
-      $issues[] = "raw id fragment left in name \"{$m['name']}\" ({$m['model']})";
+  // lowercased fragment that should have become a proper word. Only meaningful for the
+  // engines that format their own names.
+  if ( in_array( $type, $formats_own_names, true ) ) {
+    foreach ( $models as $m ) {
+      if ( $m['name'] === $m['model'] ) {
+        $issues[] = "unformatted name for {$m['model']} (name === id)";
+      }
+      else if ( preg_match( '/(preview|latest|exp|[0-9]{4}-[0-9]{2}|customtools|nano-banana)/i', $m['name'] )
+        && !preg_match( '/\(/', $m['name'] ) ) {
+        $issues[] = "raw id fragment left in name \"{$m['name']}\" ({$m['model']})";
+      }
     }
   }
 
   // 3. Capability mismatches: the id advertises something the features do not.
-  // These are the exact shapes that were silently wrong before 2026-07-26.
+  // These are the exact shapes that were silently wrong before 2026-07-26. Each engine
+  // names its features in its own vocabulary (Google says 'image-generation', OpenRouter
+  // says 'text-to-image'), so any one of the listed synonyms satisfies the expectation.
   $expectations = [
-    // id pattern                => feature that must be present
-    '/-image(-preview)?$|nano-banana/' => 'image-generation',
-    '/embedding/'                      => 'embedding',
-    '/(native-audio|-live-)/'          => 'realtime',
-    '/(veo|video)/'                    => 'video-generation',
+    // id pattern                => any one of these features is enough
+    '/-image(-preview)?$|nano-banana/' => [ 'image-generation', 'text-to-image' ],
+    '/embedding/'                      => [ 'embedding', 'embeddings' ],
+    '/(native-audio|-live-)/'          => [ 'realtime' ],
+    '/(veo|video)/'                    => [ 'video-generation', 'text-to-video' ],
   ];
   foreach ( $models as $m ) {
     $features = (array) ( $m['features'] ?? [] );
-    foreach ( $expectations as $pattern => $needed ) {
-      if ( preg_match( $pattern, $m['model'] ) && !in_array( $needed, $features, true ) ) {
-        $issues[] = "{$m['model']} looks like '{$needed}' but features are: "
+    foreach ( $expectations as $pattern => $accepted ) {
+      if ( preg_match( $pattern, $m['model'] ) && !array_intersect( $accepted, $features ) ) {
+        $issues[] = "{$m['model']} looks like '{$accepted[0]}' but features are: "
           . ( implode( ',', $features ) ?: '(none)' );
       }
     }

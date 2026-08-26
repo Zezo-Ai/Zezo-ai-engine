@@ -15,10 +15,12 @@ define( 'MWAI_OPENAI_MODELS', [
     'name' => 'GPT-5.6 Sol',
     'family' => 'gpt-5',
     'features' => ['completion'],
+    // Price cut by OpenAI on 2026-08-21 (was 5.00 / 30.00 / 0.50). Announced as
+    // promotional "at least through 2026-11-21", so re-check it after that date.
     'price' => [
-      'in' => 5.00,
-      'out' => 30.00,
-      'cached' => 0.50,
+      'in' => 4.00,
+      'out' => 20.00,
+      'cached' => 0.40,
     ],
     'type' => 'token',
     'unit' => 1 / 1000000,
@@ -1222,7 +1224,8 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxCompletionTokens' => 32000,
     'maxContextualTokens' => 200000,
     'finetune' => false,
-    // Deprecated by Anthropic: retires on the Claude API on August 5, 2026.
+    // Retired by Anthropic on 2026-08-05: the Claude API now errors on this model.
+    // Kept listed and tagged 'deprecated' so existing configurations still show what they point at.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
     'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
@@ -1240,7 +1243,8 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'maxCompletionTokens' => 32000,
     'maxContextualTokens' => 200000,
     'finetune' => false,
-    // Deprecated by Anthropic: retires on the Claude API on August 5, 2026.
+    // Retired by Anthropic on 2026-08-05: the Claude API now errors on this model.
+    // Kept listed and tagged 'deprecated' so existing configurations still show what they point at.
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
     'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],

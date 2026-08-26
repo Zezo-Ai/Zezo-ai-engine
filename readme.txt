@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 3.7.2
+Stable tag: 3.7.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -294,6 +294,12 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.7.3 (2026/08/26) =
+* Fix: Chatbots using the default environment and model are no longer excluded from the function calling list.
+* Fix: Vision now detects image types from the file contents instead of the extension, so images served through a CDN work.
+* Fix: Magic Wand can read the selected text again in the iframed block editor of WordPress 7.1, re-enabling Suggest Synonyms.
+* Update: Completed steps in the Setup Assistant now collapse to a single line.
 
 = 3.7.2 (2026/08/20) =
 * Fix: Editor Assistant endpoints accepted a nonce any visitor could generate, allowing anyone to run AI queries on the site's provider account (reported by Abdullah Kareem via WPScan).

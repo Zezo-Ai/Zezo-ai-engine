@@ -212,10 +212,48 @@ class Meow_MWAI_Query_DroppedFile {
     return base64_encode( $data );
   }
 
+  /**
+   * Detect an image MIME type from the raw bytes' magic signature.
+   * Returns null when the bytes are not a recognised image format.
+   */
+  private static function detect_image_mime_from_bytes( $data ) {
+    if ( !is_string( $data ) || strlen( $data ) < 12 ) {
+      return null;
+    }
+    if ( substr( $data, 0, 3 ) === "\xFF\xD8\xFF" ) {
+      return 'image/jpeg';
+    }
+    if ( substr( $data, 0, 8 ) === "\x89PNG\r\n\x1A\n" ) {
+      return 'image/png';
+    }
+    if ( substr( $data, 0, 4 ) === 'GIF8' ) {
+      return 'image/gif';
+    }
+    if ( substr( $data, 0, 4 ) === 'RIFF' && substr( $data, 8, 4 ) === 'WEBP' ) {
+      return 'image/webp';
+    }
+    return null;
+  }
+
   // Will return something like "data:image/jpeg;base64,{data}"
   public function get_inline_base64_url() {
-    $b64 = $this->get_base64();
-    return "data:{$this->mimeType};base64,{$b64}";
+    $data = $this->get_raw_data();
+    $mimeType = $this->mimeType;
+
+    // A CDN can transcode an image on delivery (Jetpack/Photon serves WebP uploads as
+    // JPEG, Cloudflare Polish does the same), so the URL extension we derived the MIME
+    // from can disagree with the actual bytes. Sending "data:image/webp" with JPEG bytes
+    // makes the vision model receive an undecodable image and reply as if none was sent.
+    // Trust the bytes for images.
+    if ( strpos( (string) $mimeType, 'image/' ) === 0 ) {
+      $detected = self::detect_image_mime_from_bytes( $data );
+      if ( !empty( $detected ) && $detected !== $mimeType ) {
+        $mimeType = $detected;
+      }
+    }
+
+    $b64 = base64_encode( $data );
+    return "data:{$mimeType};base64,{$b64}";
   }
 
   public function get_type() {

@@ -4,7 +4,7 @@
 Plugin Name: AI Engine
 Plugin URI: https://wordpress.org/plugins/ai-engine/
 Description: AI meets WordPress. Your site can now chat, write poetry, solve problems, and maybe make you coffee.
-Version: 3.7.2
+Version: 3.7.3
 Requires at least: 6.0
 Requires PHP: 8.1
 Author: Jordy Meow
@@ -14,7 +14,7 @@ License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 */
 
-define( 'MWAI_VERSION', '3.7.2' );
+define( 'MWAI_VERSION', '3.7.3' );
 define( 'MWAI_PREFIX', 'mwai' );
 define( 'MWAI_DOMAIN', 'ai-engine' );
 define( 'MWAI_ENTRY', __FILE__ );
@@ -31,11 +31,15 @@ if ( !defined( 'MWAI_SSL_VERIFY' ) ) {
   // false in wp-config.php.
   define( 'MWAI_SSL_VERIFY', true );
 }
-define( 'MWAI_FALLBACK_MODEL', 'gpt-5.5' );
-define( 'MWAI_FALLBACK_MODEL_FAST', 'gpt-5-mini' );
-define( 'MWAI_FALLBACK_MODEL_VISION', 'gpt-5-mini' );
-define( 'MWAI_FALLBACK_MODEL_JSON', 'gpt-5-mini' );
-define( 'MWAI_FALLBACK_MODEL_IMAGES', 'gpt-image-1.5' );
+// What a fresh install lands on, and what anything without an explicit model falls back to.
+// These must never point at a model tagged 'deprecated' in constants/models.php: the admin
+// then shows a deprecation warning on a brand new site. Re-check them whenever a model is
+// tagged deprecated there.
+define( 'MWAI_FALLBACK_MODEL', 'gpt-5.6-terra' );
+define( 'MWAI_FALLBACK_MODEL_FAST', 'gpt-5.6-luna' );
+define( 'MWAI_FALLBACK_MODEL_VISION', 'gpt-5.6-luna' );
+define( 'MWAI_FALLBACK_MODEL_JSON', 'gpt-5.6-luna' );
+define( 'MWAI_FALLBACK_MODEL_IMAGES', 'gpt-image-2' );
 define( 'MWAI_FALLBACK_MODEL_AUDIO', 'whisper-1' );
 define( 'MWAI_FALLBACK_MODEL_EMBEDDINGS', 'text-embedding-3-small' );
 

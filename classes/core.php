@@ -1127,7 +1127,7 @@ class Meow_MWAI_Core {
         $chatbot['imageUpload'] = $chatbot['fileUpload']; // Keep imageUpload in sync
       }
 
-      // Migration: DALL-E was removed (deprecated by OpenAI). Move chatbots to gpt-image-1.5.
+      // Migration: DALL-E was removed (deprecated by OpenAI). Move chatbots to the image fallback.
       // TODO: Remove after 2027-04 (1 year after the shutdown on 2026-05-12).
       if ( isset( $chatbot['model'] )
         && in_array( $chatbot['model'], [ 'dall-e', 'dall-e-2', 'dall-e-3', 'dall-e-3-hd' ], true ) ) {
@@ -1166,11 +1166,10 @@ class Meow_MWAI_Core {
   * also expose it as a feature, so we accept both.
   */
   public function chatbot_supports_functions( $chatbot ) {
-    $modelId = $chatbot['model'] ?? null;
+    list( $envId, $modelId ) = $this->resolve_chatbot_env_model( $chatbot );
     if ( empty( $modelId ) ) {
       return false;
     }
-    $envId = $chatbot['envId'] ?? ( $chatbot['environment'] ?? null );
     $model = $this->find_model_data( $modelId, $envId );
     if ( empty( $model ) ) {
       return false;
@@ -1178,6 +1177,43 @@ class Meow_MWAI_Core {
     $tags = $model['tags'] ?? [];
     $features = $model['features'] ?? [];
     return in_array( 'functions', $tags, true ) || in_array( 'functions', $features, true );
+  }
+
+  /**
+  * Resolves the environment and model a chatbot will actually run with. A chatbot
+  * left on "Default" stores no envId/model, so we have to apply the same fallbacks
+  * as Meow_MWAI_Services_ModelEnvironment::validate_env_model(), otherwise such a
+  * chatbot looks like it has no model at all (it was dropped by the 'functions'
+  * filter of get_chatbots(), for instance).
+  * Returns [ $envId, $modelId ], either of which can be null.
+  */
+  public function resolve_chatbot_env_model( $chatbot ) {
+    $envId = $chatbot['envId'] ?? ( $chatbot['environment'] ?? null );
+    $modelId = $chatbot['model'] ?? null;
+
+    if ( empty( $envId ) && empty( $modelId ) ) {
+      return [ $this->get_option( 'ai_default_env' ), $this->get_option( 'ai_default_model' ) ];
+    }
+
+    // Model without an environment: find_model_data() already searches the engine
+    // defaults and the custom models, so there is nothing else to resolve.
+    if ( empty( $envId ) ) {
+      return [ null, $modelId ];
+    }
+
+    // Environment without a model: the first model of that environment is used.
+    if ( empty( $modelId ) ) {
+      $env = $this->get_ai_env( $envId );
+      if ( !empty( $env['models'] ) && is_array( $env['models'] ) ) {
+        $firstModel = reset( $env['models'] );
+        if ( !empty( $firstModel['model'] ) ) {
+          return [ $envId, $firstModel['model'] ];
+        }
+      }
+      return [ $envId, $this->get_option( 'ai_default_model' ) ];
+    }
+
+    return [ $envId, $modelId ];
   }
 
   /**
@@ -1901,7 +1937,7 @@ class Meow_MWAI_Core {
       }
     }
 
-    // Migration: DALL-E was removed (deprecated by OpenAI). Move users to gpt-image-1.5.
+    // Migration: DALL-E was removed (deprecated by OpenAI). Move users to the image fallback.
     // TODO: Remove after 2027-04 (1 year after the shutdown on 2026-05-12).
     if ( isset( $options['ai_images_default_model'] )
       && in_array( $options['ai_images_default_model'], [ 'dall-e', 'dall-e-2', 'dall-e-3', 'dall-e-3-hd' ], true ) ) {

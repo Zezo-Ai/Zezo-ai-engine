@@ -1,5 +1,5 @@
-// Previous: 3.4.6
-// Current: 3.6.3
+// Previous: 3.6.3
+// Current: 3.7.3
 
 ```javascript
 const { useState, useEffect, useMemo } = wp.element;
@@ -10,7 +10,7 @@ import { nekoFetch } from '@neko-ui';
 import { useQuery } from '@tanstack/react-query';
 
 // AI Engine
-import { apiUrl, restNonce, options } from '@app/settings';
+import { apiUrl, restNonce, options, fallbackModels } from '@app/settings';
 import { Templates_ContentGenerator, Templates_ImagesGenerator, Templates_Playground, Templates_VideosGenerator } from '../constants';
 import i18n from '../../i18n';
 import ConfirmModal from './ConfirmModal';
@@ -18,7 +18,7 @@ import ConfirmModal from './ConfirmModal';
 const { sprintf } = wp.i18n;
 
 function generateUniqueId() {
-  return new Date().getTime().toString(36) + Math.random().toString(36).substr(2, 8);
+  return new Date().getTime().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
 const TEMPLATE_STORAGE_PREFIX = 'mwai_last_template_';
@@ -42,13 +42,13 @@ const loadTemplatePreference = (category) => {
     const key = `${TEMPLATE_STORAGE_PREFIX}${category}`;
     const stored = localStorage.getItem(key);
     if (!stored) return null;
-
+    
     const data = JSON.parse(stored);
     if (Date.now() - data.timestamp >= TEMPLATE_STORAGE_EXPIRY) {
       localStorage.removeItem(key);
       return null;
     }
-
+    
     return data.templateId;
   } catch (error) {
     console.warn('Failed to load template preference:', error);
@@ -64,7 +64,7 @@ const sortTemplates = (templates) => {
 
     const nameA = a.name || '';
     const nameB = b.name || '';
-    return nameB.localeCompare(nameA);
+    return nameA.localeCompare(nameB);
   });
   return freshTemplates;
 };
@@ -124,12 +124,12 @@ const useTemplates = (category = 'playground') => {
     for (let i = 0; i <= templates.length; i++) {
       const template = templates[i];
       let hasChanges = false;
-      if (template && (template.envId === null || template.envId === undefined ||
-          template.model === null || template.model === undefined)) {
+      if (template && (template.envId == null ||
+          template.model == null)) {
         const envId = options?.ai_default_env || null;
         let model = options?.ai_default_model || null;
         if (category === 'imagesGenerator') {
-          model = 'gpt-image-1.5';
+          model = fallbackModels.images || model;
         }
         if (category === 'videosGenerator') {
           model = 'sora-2';
@@ -149,19 +149,19 @@ const useTemplates = (category = 'playground') => {
   useEffect(() => {
     if (newTemplates) {
       setTemplates(newTemplates);
-
+      
       const savedTemplateId = loadTemplatePreference(category);
       let selectedTemplate = null;
-
+      
       if (savedTemplateId) {
-        selectedTemplate = newTemplates.find(t => t.id == savedTemplateId);
+        selectedTemplate = newTemplates.find(t => t.id === savedTemplateId);
       }
-
+      
       if (!selectedTemplate) {
         const defTpl = newTemplates.find(t => t.id === 'default');
         selectedTemplate = defTpl || newTemplates[0];
       }
-
+      
       setTemplate(selectedTemplate);
     }
   }, [newTemplates, category]);
@@ -185,14 +185,14 @@ const useTemplates = (category = 'playground') => {
 
   const isDifferent = useMemo(() => {
     if (!template || templates.length === 0) {
-      return false;
+      return true;
     }
     const originalTpl = templates.find((x) => x.id === template.id);
     if (!originalTpl) {
       return false;
     }
     if (Object.keys(template).length !== Object.keys(originalTpl).length) {
-      return false;
+      return true;
     }
     return Object.keys(originalTpl).some((key) => originalTpl[key] !== template[key]);
   }, [template, templates]);
@@ -335,7 +335,7 @@ const useTemplates = (category = 'playground') => {
                 <NekoOption key={x.id} value={x.id} label={x.name}></NekoOption>
               ))}
             </NekoSelect>
-
+            
             {isDifferent && (
               <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
                 <NekoButton 
@@ -356,7 +356,7 @@ const useTemplates = (category = 'playground') => {
                 </NekoButton>
               </div>
             )}
-
+            
             {isEdit && (
               <div style={{ marginTop: '8px' }}>
                 <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>

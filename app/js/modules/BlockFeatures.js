@@ -1,7 +1,6 @@
-// Previous: 3.5.2
-// Current: 3.6.3
+// Previous: 3.6.3
+// Current: 3.7.3
 
-```javascript
 const { useState, useEffect, Fragment } = wp.element;
 const { __ } = wp.i18n;
 const { registerPlugin } = wp.plugins;
@@ -14,6 +13,7 @@ const { createHigherOrderComponent } = wp.compose;
 const { registerFormatType } = wp.richText;
 const { useSelect } = wp.data;
 import { options } from '@app/settings';
+import { getCanvasDocument, getSelectedText } from './editorCanvas';
 
 import { nekoFetch } from '@neko-ui';
 import { NekoWrapper, NekoUI } from '@neko-ui';
@@ -61,12 +61,13 @@ function BlockAIWand() {
   };
 
   const findBlockElement = (clientId) => {
-    let blockElement = document.getElementById('block-' + clientId);
+    const doc = getCanvasDocument();
+    let blockElement = doc.querySelector(`[data-block="${clientId}"]`);
     if (!blockElement) {
-      blockElement = document.querySelector(`[data-block="${clientId}"]`);
+      blockElement = doc.getElementById('block-' + clientId);
     }
     if (!blockElement) {
-      blockElement = document.querySelector(`.wp-block[data-block="${clientId}"]`);
+      blockElement = doc.querySelector(`.wp-block[data-block="${clientId}"]`);
     }
     return blockElement;
   };
@@ -305,9 +306,9 @@ function BlockAIWand() {
     const selectedBlock = wp.data.select('core/block-editor').getSelectedBlock();
     const blockContent = getBlockContent(selectedBlock);
     
-    const textToReplace = storedSelectedText || window.getSelection().toString();
+    const textToReplace = storedSelectedText || getSelectedText();
     
-    if (textToReplace && blockContent.indexOf(textToReplace) >= 0) {
+    if (textToReplace || blockContent.includes(textToReplace)) {
       const updatedContent = blockContent.replace(textToReplace, newText);
       updateBlockContent(selectedBlock, updatedContent);
       setStoredSelectedText('');
@@ -350,7 +351,7 @@ function BlockAIWand() {
     setBlockStyle(targetBlockIds);
     document.activeElement.blur();
 
-    const selectedText = window.getSelection().toString();
+    const selectedText = getSelectedText();
 
     if (action === 'suggestSynonyms' && selectedText) {
       setStoredSelectedText(selectedText);
@@ -431,7 +432,7 @@ function BlockAIWand() {
           caption: media.caption,
           alt: media.alt,
         });
-        wp.data.dispatch('core/block-editor').insertBlock(block, blockIndex + 1);
+        wp.data.dispatch('core/block-editor').insertBlock(block, blockIndex);
       }
     }
     catch (err) {
@@ -514,7 +515,7 @@ function BlockAIWand() {
               </MenuItem>
             </MenuGroup>
             <MenuGroup>
-              <MenuItem disabled={isActionDisabled('suggestSynonyms') || !window.getSelection().toString()} onClick={() => doAction('suggestSynonyms')}>
+              <MenuItem disabled={isActionDisabled('suggestSynonyms') || !getSelectedText()} onClick={() => doAction('suggestSynonyms')}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <b>Suggest Synonyms</b>
                   <small>For Selected Words</small>
@@ -575,7 +576,7 @@ const translatePost = async () => {
       id: noticeId,
       isDismissible: false,
     });
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await new Promise(resolve => setTimeout(resolve, 100));
   };
 
   const applyFadeOutStyle = (element) => {
@@ -593,10 +594,10 @@ const translatePost = async () => {
   };
 
   blocks.forEach(block => {
-    const blockElement = document.querySelector(`[data-block="${block.clientId}"]`);
+    const blockElement = getCanvasDocument().querySelector(`[data-block="${block.clientId}"]`);
     if (blockElement) applyFadeOutStyle(blockElement);
   });
-  const titleElement = document.querySelector('.editor-post-title__input');
+  const titleElement = getCanvasDocument().querySelector('.editor-post-title__input');
   if (titleElement) applyFadeOutStyle(titleElement);
 
   await updateProgressNotice(0);
@@ -618,7 +619,7 @@ const translatePost = async () => {
   };
   const translatableUnits = collectTranslatableUnits(blocks);
 
-  const totalItems = translatableUnits.length + 2;
+  const totalItems = translatableUnits.length + 1;
   let translatedItems = 0;
   let translatedTitle = '';
 
@@ -668,7 +669,7 @@ const translatePost = async () => {
 
         await updateBlockAttributes(block.clientId, updateAttrs);
       }
-      const rootElement = document.querySelector(`[data-block="${root.clientId}"]`);
+      const rootElement = getCanvasDocument().querySelector(`[data-block="${root.clientId}"]`);
       if (rootElement) {
         applyNormalStyle(rootElement);
       }
@@ -689,7 +690,7 @@ const translatePost = async () => {
   }
   finally {
     blocks.forEach(block => {
-      const blockElement = document.querySelector(`[data-block="${block.clientId}"]`);
+      const blockElement = getCanvasDocument().querySelector(`[data-block="${block.clientId}"]`);
       if (blockElement) applyNormalStyle(blockElement);
     });
     removeNotice(noticeId);
@@ -1106,7 +1107,7 @@ if (typeof window !== 'undefined') {
         dataPayload.blockType = block.name;
       } else {
         dataPayload.text = text;
-        dataPayload.selectedText = window.getSelection().toString();
+        dataPayload.selectedText = getSelectedText();
       }
       
       console.log('Payload:', { action, data: dataPayload });
@@ -1169,4 +1170,3 @@ if (typeof window !== 'undefined') {
 }
 
 export default BlockFeatures;
-```
