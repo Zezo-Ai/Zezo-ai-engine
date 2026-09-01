@@ -460,6 +460,13 @@ class Meow_MWAI_Labs_MCP_OAuth {
     if ( !is_user_logged_in() ) {
       $current_url = rest_url( $this->namespace . '/oauth/authorize' );
       $current_url = add_query_arg( $params, $current_url );
+      // Never let this redirect be cached. Full-page caches that also cache the REST
+      // API (LiteSpeed Cache's "Cache REST API", for one) key it on the request URL,
+      // so the first hit on a given authorize URL wins. That first hit is typically a
+      // backend probe from the connector infrastructure, with no cookies, and the
+      // user's real browser is then served the cached bounce-to-login instead of the
+      // consent screen. Every attempt fails, and nothing reaches PHP to be logged.
+      nocache_headers();
       wp_safe_redirect( wp_login_url( $current_url ) );
       exit;
     }
@@ -488,6 +495,7 @@ class Meow_MWAI_Labs_MCP_OAuth {
 
   private function handle_authorize_submit( WP_REST_Request $request ) {
     if ( !is_user_logged_in() ) {
+      nocache_headers();
       wp_safe_redirect( wp_login_url() );
       exit;
     }

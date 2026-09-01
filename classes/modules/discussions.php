@@ -774,10 +774,18 @@ class Meow_MWAI_Modules_Discussions {
       $chatExtra['storeId'] = $query->storeId;
     }
 
-    // Store response ID and date for Responses API
+    // Store response ID and date for Responses API.
+    // The extra of an existing discussion is MERGED, not replaced, so an absent key keeps
+    // whatever was stored before. That is the right default, but it means a caller cannot
+    // clear the chain by simply omitting the id. An explicit null does clear it, which is
+    // how a turn ending on an unanswered client-side function call unsticks itself.
     if ( !empty( $extra['responseId'] ) ) {
       $chatExtra['previousResponseId'] = $extra['responseId'];
       $chatExtra['previousResponseDate'] = $now;
+    }
+    else if ( array_key_exists( 'responseId', $extra ) ) {
+      $chatExtra['previousResponseId'] = null;
+      $chatExtra['previousResponseDate'] = null;
     }
 
     $nowMs = (int) round( microtime( true ) * 1000 );

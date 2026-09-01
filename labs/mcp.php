@@ -10,7 +10,7 @@
 * - Authentication via OAuth (see mcp-oauth.php) or a static bearer token
 * - Optional URL-token endpoint (/mcp/v1/{token}) for clients that cannot send headers
 * - Properly handles agent cancellation signals (notifications/cancelled) to free workers immediately
-* - Uses 30-second timeout to prevent worker exhaustion from abandoned connections
+* - Caps how long an idle stream holds a PHP worker (see Connection Management below)
 * - Sends heartbeat signals to detect dead connections quickly
 *
 * The legacy SSE transport (/mcp/v1/sse plus /messages, driven by a bundled mcp.js Node
@@ -19,7 +19,11 @@
 *
 * Connection Management:
 * - Agents send notifications/cancelled when done, triggering immediate stream closure
-* - 30-second timeout ensures workers are freed even if agents forget to disconnect
+* - An idle timeout frees the worker even when agents forget to disconnect. It is
+*   180 seconds normally, and 30 seconds when MCP debug logging is on. Size PHP
+*   workers off 180s, not 30s: an agent that opens streams and never sends DELETE
+*   holds one worker per stream for the full three minutes. Override with the
+*   mwai_mcp_stream_max_time filter (see below) if that is too long for the host.
 * - Heartbeat comments (every 10s) help proxies and connection_aborted() detect dead sockets
 */
 
@@ -669,9 +673,26 @@ class Meow_MWAI_Labs_MCP {
     echo 'data: {"session":"' . esc_js( $session_id ) . "\"}\n\n";
     flush();
 
+    $max_time = $this->logging ? 30 : 60 * 3;
+    /**
+    * How long an idle SSE stream may hold a PHP worker, in seconds.
+    *
+    * Each open stream occupies one worker until this elapses, so a client that opens
+    * streams without ever sending DELETE can pin the whole pool on a small host.
+    * Lower this when that happens; the client simply reconnects.
+    *
+    * Resolved once per stream, not inside the loop below, which spins five times a second.
+    *
+    * @param int $max_time Seconds. 180 normally, 30 when MCP logging is enabled.
+    * @param string $session_id The session this stream belongs to.
+    */
+    $max_time = (int) apply_filters( 'mwai_mcp_stream_max_time', $max_time, $session_id );
+    if ( $max_time < 5 ) {
+      $max_time = 5;
+    }
+
     // Main SSE loop - listen for server-initiated messages
     while ( true ) {
-      $max_time = $this->logging ? 30 : 60 * 3;
       $idle = ( time() - $this->last_action_time ) >= $max_time;
 
       if ( connection_aborted() || $idle ) {

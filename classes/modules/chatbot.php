@@ -147,7 +147,7 @@ class Meow_MWAI_Modules_Chatbot {
     return true;
   }
 
-  public function build_final_res( $botId, $newMessage, $newFileId, $params, $reply, $images, $actions, $usage, $responseId = null ) {
+  public function build_final_res( $botId, $newMessage, $newFileId, $params, $reply, $images, $actions, $usage, $responseId = null, $resetResponseId = false ) {
     $filterParams = [
       'step' => 'reply',
       'botId' => $botId,
@@ -180,6 +180,13 @@ class Meow_MWAI_Modules_Chatbot {
     // Add response ID if available
     if ( !empty( $responseId ) ) {
       $result['responseId'] = $responseId;
+    }
+    // Tell the client to forget the id it was chaining on. An absent responseId is not
+    // enough of a signal: the client keeps its previous one, which is a valid id, so the
+    // provider would accept it and silently resume from BEFORE this turn, losing the
+    // user's last message from the model's view. This flag is explicit for that reason.
+    else if ( $resetResponseId ) {
+      $result['resetResponseId'] = true;
     }
 
     // Check if token needs refresh
@@ -245,7 +252,8 @@ class Meow_MWAI_Modules_Chatbot {
         $data['images'],
         $data['actions'],
         $data['usage'],
-        $data['responseId'] ?? null
+        $data['responseId'] ?? null,
+        !empty( $data['resetResponseId'] )
       );
       // A paused turn waiting for a tool approval (Workspace WordPress Tools).
       if ( !empty( $data['approval'] ) ) {
@@ -1048,10 +1056,29 @@ class Meow_MWAI_Modules_Chatbot {
       // Store response ID for Responses API stateful conversations
       // CRITICAL: Must store even when function calls are present
       // This enables the feedback query to use previous_response_id
-      if ( !empty( $reply->id ) ) {
+      //
+      // ...with one exception: client-side functions (target 'js'). Those are dispatched
+      // to the browser and never produce a function_call_output, so the provider-side
+      // conversation ends on a function_call that will never be answered. Stateful APIs
+      // reject the NEXT turn outright with "No tool output found for function call
+      // call_xxx" (invalid_request_error), which strands the whole discussion: the JS
+      // tool ran fine, then every following message fails. So we deliberately break the
+      // response-id chain here. The next turn falls back to sending the local history,
+      // which costs a few more tokens and loses nothing the user can see.
+      $hasUnresolvedClientActions = !empty( $reply->needClientActions )
+        && !empty( $reply->id )
+        && $this->core->responseIdManager->is_stateful_conversation_id( $reply->id );
+      if ( !empty( $reply->id ) && !$hasUnresolvedClientActions ) {
         $extra['responseId'] = $reply->id;
         $extra['responseDate'] = gmdate( 'Y-m-d H:i:s' ); // Track age for 30-day expiry
       }
+      else if ( $hasUnresolvedClientActions ) {
+        // Explicit null (not merely absent) so the stored chain is cleared rather than
+        // left pointing at an earlier turn. See store_chat() in discussions.php.
+        $extra['responseId'] = null;
+      }
+      // The client keeps its own copy of the id (useChatSession), so it needs telling too.
+      $resetResponseId = $hasUnresolvedClientActions;
       $rawText = apply_filters( 'mwai_chatbot_reply', $rawText, $reply, $params, $extra );
 
       // Integrity Check: We need to store the checksum of the messages sent by the client.
@@ -1088,9 +1115,14 @@ class Meow_MWAI_Modules_Chatbot {
         $restRes['debugEvents'] = $debugEvents;
       }
 
-      // Add response ID if available (for Responses API)
-      if ( !empty( $reply->id ) ) {
+      // Add response ID if available (for Responses API). Withheld when the turn ended
+      // on an unanswered client-side function call, so clients that chain on it
+      // (Workspace, useChatSession) do not send back an id the provider will reject.
+      if ( !empty( $reply->id ) && !$hasUnresolvedClientActions ) {
         $restRes['responseId'] = $reply->id;
+      }
+      else if ( $resetResponseId ) {
+        $restRes['resetResponseId'] = true;
       }
 
       // Process Reply
@@ -1104,7 +1136,8 @@ class Meow_MWAI_Modules_Chatbot {
           $restRes['images'],
           $restRes['actions'],
           $restRes['usage'],
-          $restRes['responseId'] ?? null
+          $restRes['responseId'] ?? null,
+          !empty( $restRes['resetResponseId'] )
         );
         $this->core->stream_push( [ 'type' => 'end', 'data' => json_encode( $final_res ) ], $query );
         die();

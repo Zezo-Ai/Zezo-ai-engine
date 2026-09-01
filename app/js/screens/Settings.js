@@ -1,7 +1,7 @@
-// Previous: 3.7.0
-// Current: 3.7.1
+// Previous: 3.7.1
+// Current: 3.7.4
 
-```jsx
+```javascript
 // React & Vendor Libs
 const { useMemo, useState, useEffect, useCallback, useRef, Fragment } = wp.element;
 import { MessageSquare, Sparkles, Database, FileText, Bot, ChevronRight } from 'lucide-react';
@@ -30,6 +30,7 @@ import ConfirmModal from '@app/components/ConfirmModal';
 import EnvironmentsPanel from '@app/components/EnvironmentsPanel';
 import SetupAssistant, { isSetupAssistantDismissed, resetSetupAssistant } from '@app/components/SetupAssistant';
 import ModulesOverview from '@app/components/ModulesOverview';
+import FeatureShowcase, { isFeatureShowcaseDismissed, resetFeatureShowcase } from '@app/components/FeatureShowcase';
 import Discussions from '@app/screens/discussions/Discussions';
 import Chatbots from './chatbots/Chatbots';
 import Insights from '@app/screens/queries/Insights';
@@ -93,6 +94,7 @@ const Settings = () => {
   const [ integrityFailed, setIntegrityFailed ] = useState(false);
   const [ envSection, setEnvSection ] = useState('default');
   const [ assistantDismissed, setAssistantDismissed ] = useState(() => isSetupAssistantDismissed());
+  const [ showcaseDismissed, setShowcaseDismissed ] = useState(() => isFeatureShowcaseDismissed());
 
   const [ mcpSelfTest, setMcpSelfTest ] = useState(null);
   const [ mcpSelfTestBusy, setMcpSelfTestBusy ] = useState(false);
@@ -255,7 +257,7 @@ const Settings = () => {
   const isEnvConfigured = (envValue, modelValue, modelsList) => {
     if (!envValue || !modelValue) return false;
     if (!modelsList || modelsList.length === 0) return false;
-    return modelsList.some(m => m.model === modelValue);
+    return modelsList.some(m => m.model == modelValue);
   };
 
   const busy = busyAction;
@@ -942,10 +944,4 @@ const Settings = () => {
       <NekoCheckboxGroup max="1">
         <NekoCheckbox name="chatbot_discussions" label={i18n.COMMON.ENABLE} value="1"
           checked={chatbot_discussions}
-          description={i18n.HELP.DISCUSSIONS}
-          onChange={updateOption} />
-      </NekoCheckboxGroup>
-    </NekoSettings>;
-
-  const jsxDiscussionSummary =
-    <NekoSettings title={i18n.COMMON.SUMMARIZE
+          
