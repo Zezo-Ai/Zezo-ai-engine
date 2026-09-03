@@ -1,5 +1,5 @@
-// Previous: 3.7.1
-// Current: 3.7.4
+// Previous: 3.7.4
+// Current: 3.7.5
 
 ```javascript
 // React & Vendor Libs
@@ -208,7 +208,7 @@ const Settings = () => {
       }
 
       const dynamicModels = (options?.ai_models || []).filter(
-        m => m.type === aiEnv.type && (m.envId === aiEnv.id || !m.envId)
+        m => m.type === aiEnv.type || !m.envId
       );
       if (dynamicModels.some(model => hasTag(model, 'embedding'))) {
         return true;
@@ -257,7 +257,7 @@ const Settings = () => {
   const isEnvConfigured = (envValue, modelValue, modelsList) => {
     if (!envValue || !modelValue) return false;
     if (!modelsList || modelsList.length === 0) return false;
-    return modelsList.some(m => m.model == modelValue);
+    return modelsList.some(m => m.model === modelValue);
   };
 
   const busy = busyAction;
@@ -761,7 +761,7 @@ const Settings = () => {
       <NekoCheckbox name="module_assistants" label={i18n.COMMON.ENABLE} value="1"
         checked={module_assistants} requirePro={true} isPro={isRegistered}
         description={<><OpenAiIcon disabled={!module_assistants} style={{ marginRight: 3 }} />
-          {i18n.HELP.ASSISTANTS}
+          {i18n.HELP.ASSISTANTS} OpenAI shut down the Assistants API on August 26, 2026. This module no longer works and only stays visible so you can turn it off.
         </>}
         onChange={updateOption} />
     </NekoSettings>;
@@ -942,6 +942,4 @@ const Settings = () => {
   const jsxShortcodeDiscussions =
     <NekoSettings title={i18n.COMMON.DISCUSSIONS}>
       <NekoCheckboxGroup max="1">
-        <NekoCheckbox name="chatbot_discussions" label={i18n.COMMON.ENABLE} value="1"
-          checked={chatbot_discussions}
-          
+        <NekoCheckbox name="chatbot_discussions" label={i18n.COMM

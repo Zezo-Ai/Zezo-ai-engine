@@ -241,8 +241,45 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
     return $tools;
   }
 
+  /**
+  * Built-in tools this engine can honor on the Chat Completions path. Empty here: the
+  * OpenAI engine only honors them on its Responses path, which never reaches this builder.
+  * Subclasses that map a tool onto something native (OpenRouter's web plugin) override it.
+  */
+  protected function supported_builtin_tools(): array {
+    return [];
+  }
+
+  /**
+  * The OpenAI-style built-in tools (web_search, image_generation, code_interpreter) only
+  * exist on the Responses API. A Chat Completions body has nowhere to put them, so any that
+  * reach this builder are dropped. Dropping them silently produced reports of "Web Search
+  * is enabled but the model says it cannot browse" with nothing in the logs, because the
+  * model never even saw the tool. Say what happened and why, once per request.
+  *
+  * Logged as an error on purpose: warn() only reaches the plugin's own log when Dev Tools
+  * and Server Debug Mode are both on, which nobody has on by default. error() always
+  * reaches PHP's error_log, which is the first place anyone looks.
+  */
+  protected function warn_dropped_builtin_tools( $query ): void {
+    if ( empty( $query->tools ) || !is_array( $query->tools ) ) {
+      return;
+    }
+    $builtin = [ 'web_search', 'image_generation', 'code_interpreter' ];
+    $dropped = array_values( array_diff( array_intersect( $query->tools, $builtin ), $this->supported_builtin_tools() ) );
+    if ( empty( $dropped ) ) {
+      return;
+    }
+    Meow_MWAI_Logging::error( sprintf(
+      'Built-in tool(s) %s were enabled for model "%s", but this request went through the Chat Completions API, which cannot carry them, so they were dropped. They need the native OpenAI environment with a Responses-capable model whose id matches a built-in entry exactly (for example gpt-5.6-luna), or OpenRouter for web search.',
+      implode( ', ', $dropped ),
+      $query->model
+    ) );
+  }
+
   protected function build_body( $query, $streamCallback = null, $extra = null ) {
     if ( $query instanceof Meow_MWAI_Query_Text ) {
+      $this->warn_dropped_builtin_tools( $query );
       $body = [
         'model' => $query->model,
         'stream' => !is_null( $streamCallback ),
@@ -994,17 +1031,15 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
         }
         throw new Exception( $message );
       }
-      else if ( $responseCode === 422 ) {
+      else if ( $responseCode >= 400 ) {
+        // Any other 4xx/5xx (401, 403, 422, 429, 500, 502...). The body is thrown
+        // raw on purpose: the callers run it through try_decode_error() to pull out
+        // the provider's message, whatever its shape. Before this branch was generic,
+        // a Mistral 403 (tier_not_allowed) fell through to the JSON path and only
+        // ever surfaced as "Invalid response (no model information)".
         $message = !empty( $errorBody ) ? $errorBody : wp_remote_retrieve_response_message( $res );
         if ( empty( $message ) ) {
-          $message = 'Unprocessable Entity';
-        }
-        throw new Exception( $message );
-      }
-      else if ( $responseCode === 500 ) {
-        $message = !empty( $errorBody ) ? $errorBody : wp_remote_retrieve_response_message( $res );
-        if ( empty( $message ) ) {
-          $message = 'Internal Server Error';
+          $message = 'HTTP ' . $responseCode;
         }
         throw new Exception( $message );
       }
@@ -1228,8 +1263,26 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
 
   public function try_decode_error( $data ) {
     $json = json_decode( $data, true );
-    if ( isset( $json['error']['message'] ) ) {
-      return $json['error']['message'];
+    return is_array( $json ) ? $this->extract_error_message( $json ) : null;
+  }
+
+  /**
+  * Pulls the human-readable message out of a decoded provider error body, or null
+  * when the body does not look like an error. Two shapes exist in the wild:
+  * - OpenAI-style, nested: {"error": {"message": "...", "type": "..."}} (or "error" as a string)
+  * - Mistral-style, flat: {"object": "error", "message": "...", "type": "...", "code": "..."}
+  */
+  protected function extract_error_message( array $json ): ?string {
+    if ( !empty( $json['error'] ) ) {
+      $err = $json['error'];
+      if ( is_array( $err ) ) {
+        return isset( $err['message'] ) ? (string) $err['message'] : json_encode( $err );
+      }
+      return (string) $err;
+    }
+    $isFlatError = ( $json['object'] ?? '' ) === 'error' || ( isset( $json['type'] ) && !isset( $json['choices'] ) );
+    if ( $isFlatError && !empty( $json['message'] ) && is_string( $json['message'] ) ) {
+      return $json['message'];
     }
     return null;
   }
@@ -1616,15 +1669,9 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
   // OpenAI uses { error: { message: ... } }; some compatible providers (xAI, etc.) use a
   // plain string in the error field — handle both shapes.
   protected function handle_response_errors( $data ) {
-    if ( !isset( $data['error'] ) || empty( $data['error'] ) ) {
+    $message = is_array( $data ) ? $this->extract_error_message( $data ) : null;
+    if ( is_null( $message ) ) {
       return;
-    }
-    $err = $data['error'];
-    if ( is_array( $err ) ) {
-      $message = $err['message'] ?? json_encode( $err );
-    }
-    else {
-      $message = (string) $err;
     }
     if ( preg_match( '/API key provided(: .*)\./', $message, $matches ) ) {
       $message = str_replace( $matches[1], '', $message );

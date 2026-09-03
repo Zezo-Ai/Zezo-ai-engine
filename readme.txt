@@ -1,11 +1,11 @@
 === AI Engine - The Chatbot, AI Framework & MCP for WordPress ===
 Contributors: TigrouMeow
-Tags: ai, chatbot, gpt, claude, openai
+Tags: ai, chatbot, mcp, claude, openai
 Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 3.7.4
+Stable tag: 3.7.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -261,11 +261,13 @@ Please be aware that there may be conflicts with certain caching or performance 
 
 == Screenshots ==
 
-1. The Modules tab: pick what you want AI Engine to do, from chatbots to MCP, and see the three main ways people use it.
-2. The Workspace: a full-screen AI chat inside wp-admin that can read and manage your site, with every model you configured.
-3. Knowledge: turn your posts, pages and PDFs into embeddings so the AI answers from your own content.
-4. Workspace for iOS: your site's AI on your iPhone, with conversations kept on your own WordPress.
-5. Image generation in the iOS app, using your own API keys through your own site.
+1. A chatbot on your site, here as a popup in the corner of a page. Give it a name, an avatar and a personality.
+2. The same chatbot inline, with a dark theme. Themes are built in, and you can style your own.
+3. Realtime: a voice conversation with the AI, with avatars and the live events feed.
+4. Building a chatbot in the settings: pick the environment, the model, the context and the functions, and try it right there in the live preview.
+5. The Content Generator: a whole post from a topic, sections first, then the content and the excerpt, all editable before it is published.
+6. The Workspace: a full-screen AI chat inside wp-admin that can read and manage your site, with every model you configured.
+7. Workspace for iOS: your site's AI on your iPhone. Every model, your keys, your site, with conversations kept on your own WordPress and image generation included.
 
 == Frequently Asked Questions ==
 
@@ -302,6 +304,14 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.7.5 (2026/09/03) =
+* Add: Claude Fable 5.1 to the Anthropic models.
+* Fix: Anthropic now caps max_tokens to the model's limit instead of returning a 400 error.
+* Fix: Provider errors with a flat body (such as Mistral) and any 4xx/5xx status now show the actual error message.
+* Update: Removed the Assistants module following OpenAI's shutdown.
+* Update: Transcription now uses gpt-transcribe, and Opus 4.1 has been removed.
+* Update: Built-in tools that can't be used with Chat Completions are now reported in the logs instead of being dropped silently.
 
 = 3.7.4 (2026/09/01) =
 * Fix: Sending a message after a client-side JS function call no longer fails with an invalid_request_error.

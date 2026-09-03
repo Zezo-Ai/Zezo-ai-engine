@@ -1144,10 +1144,10 @@ class Meow_MWAI_API {
     $ai_audio_default_model = $this->core->get_option( 'ai_audio_default_model' );
 
     if ( empty( $ai_audio_default_model ) ) {
-      // Only used when no model was picked in the settings. gpt-4o-mini-transcribe replaced
-      // whisper-1 here because it costs half as much per second and transcribes better;
-      // whisper-1 stays available, it is simply no longer what you get by not choosing.
-      $ai_audio_default_model = 'gpt-4o-mini-transcribe';
+      // Only used when no model was picked in the settings. OpenAI deprecated whisper-1 and
+      // the gpt-4o-transcribe models on 2026-08-26 (shutdown 2027-02-26); gpt-transcribe is
+      // their replacement. The deprecated models stay selectable until then.
+      $ai_audio_default_model = MWAI_FALLBACK_MODEL_AUDIO;
     }
 
     $query = new Meow_MWAI_Query_Transcribe();

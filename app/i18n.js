@@ -264,6 +264,7 @@ i18n.COMMON = {
   AI_AVATAR: __( 'AI Avatar', 'ai-engine' ),
   GUEST_AVATAR: __( 'Guest Avatar', 'ai-engine' ),
   SITE_WIDE_CHATBOT: __( 'Site-Wide Chatbot', 'ai-engine' ),
+  CHATBOT_EXAMPLES: __( 'See examples ↗', 'ai-engine' ),
   QUERIES_DATA: __( 'Queries Data', 'ai-engine' ),
   QUERIES_FORMS_DATA: __( 'Queries Form Data', 'ai-engine' ),
   WEBSPEECH_API: __( 'Web Speech API', 'ai-engine' ),

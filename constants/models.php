@@ -997,6 +997,20 @@ define( 'MWAI_OPENAI_MODELS', [
   ],
   // Audio Models:
   [
+    'model' => 'gpt-transcribe',
+    'name' => 'GPT Transcribe',
+    'family' => 'whisper',
+    'features' => ['speech-to-text'],
+    'price' => 0.0045,
+    'type' => 'second',
+    'unit' => 1,
+    'finetune' => false,
+    'tags' => ['core', 'audio'],
+  ],
+  // whisper-1 and the gpt-4o-transcribe models were deprecated by OpenAI on 2026-08-26 and
+  // shut down on 2027-02-26. Kept listed and tagged 'deprecated' so existing settings still
+  // show what they point at. TODO: Remove after 2027-03-03.
+  [
     'model' => 'gpt-4o-transcribe',
     'name' => 'GPT-4o Transcribe',
     'family' => 'whisper',
@@ -1027,11 +1041,35 @@ define( 'MWAI_OPENAI_MODELS', [
     'type' => 'second',
     'unit' => 1,
     'finetune' => false,
-    'tags' => ['core', 'audio'],
+    'tags' => ['core', 'audio', 'deprecated'],
   ],
 ] );
 
 define( 'MWAI_ANTHROPIC_MODELS', [
+  [
+    'model' => 'claude-fable-5-1',
+    'name' => 'Claude Fable 5.1',
+    'family' => 'claude-5',
+    'features' => ['completion'],
+    'price' => [
+      'in' => 10.00,
+      'out' => 50.00,
+      // Cache reads are 0.025x the input price on Fable 5.1 (other Claude models use 0.1x).
+      'cached' => 0.25,
+    ],
+    'type' => 'token',
+    'unit' => 1 / 1000000,
+    'maxCompletionTokens' => 128000,
+    'maxContextualTokens' => 1000000,
+    'finetune' => false,
+    // Same surface as Fable 5 (always-on adaptive thinking, no temperature, no
+    // prefill). New in 5.1: forced tool_choice (any/tool) returns a 400, and
+    // replayed thinking blocks are bound to the conversation prefix. Our engine
+    // never forces tool_choice and only replays blocks append-only within the
+    // function-call loop, so no special handling is needed.
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature', 'latest'],
+    'tools' => ['code_interpreter', 'thinking', 'web_search']
+  ],
   [
     'model' => 'claude-fable-5',
     'name' => 'Claude Fable 5',
@@ -1048,7 +1086,7 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'finetune' => false,
     // Adaptive thinking is always on (no disabled mode, no manual budget, no
     // assistant prefill). Our engine never sends those, so no special handling.
-    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature', 'latest'],
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'no-temperature'],
     'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
   [
@@ -1210,44 +1248,8 @@ define( 'MWAI_ANTHROPIC_MODELS', [
     'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp'],
     'tools' => ['code_interpreter', 'thinking', 'web_search']
   ],
-  [
-    'model' => 'claude-opus-4-1-20250805',
-    'name' => 'Claude Opus 4.1 (2025/08/05)',
-    'family' => 'claude-4',
-    'features' => ['completion'],
-    'price' => [
-      'in' => 15.00,
-      'out' => 75.00,
-    ],
-    'type' => 'token',
-    'unit' => 1 / 1000000,
-    'maxCompletionTokens' => 32000,
-    'maxContextualTokens' => 200000,
-    'finetune' => false,
-    // Retired by Anthropic on 2026-08-05: the Claude API now errors on this model.
-    // Kept listed and tagged 'deprecated' so existing configurations still show what they point at.
-    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking', 'web_search']
-  ],
-  [
-    'model' => 'claude-opus-4-1',
-    'name' => 'Claude Opus 4.1',
-    'family' => 'claude-4',
-    'features' => ['completion'],
-    'price' => [
-      'in' => 15.00,
-      'out' => 75.00,
-    ],
-    'type' => 'token',
-    'unit' => 1 / 1000000,
-    'maxCompletionTokens' => 32000,
-    'maxContextualTokens' => 200000,
-    'finetune' => false,
-    // Retired by Anthropic on 2026-08-05: the Claude API now errors on this model.
-    // Kept listed and tagged 'deprecated' so existing configurations still show what they point at.
-    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'reasoning', 'mcp', 'deprecated'],
-    'tools' => ['code_interpreter', 'thinking', 'web_search']
-  ],
+  // Claude Opus 4.1 was retired by Anthropic on 2026-08-05 (requests error) and removed
+  // from this list on 2026-09-03. Sites still pointing at it get the usual unknown-model error.
   [
     'model' => 'claude-opus-4-20250514',
     'name' => 'Claude Opus 4 (2025/05/14)',

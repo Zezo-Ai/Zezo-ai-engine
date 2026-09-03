@@ -119,6 +119,11 @@ class Meow_MWAI_Engines_OpenRouter extends Meow_MWAI_Engines_ChatML {
     ];
   }
 
+  // OpenRouter maps web_search onto its own web plugin below, so it is not "dropped" here.
+  protected function supported_builtin_tools(): array {
+    return [ 'web_search' ];
+  }
+
   protected function build_body( $query, $streamCallback = null, $extra = null ) {
     $body = parent::build_body( $query, $streamCallback, $extra );
     // Only add transforms and usage for chat completions, not embeddings

@@ -430,13 +430,23 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
     ];
   }
 
+  // Anthropic requires an integer max_tokens and rejects the request (400) when it exceeds
+  // the model's output limit, unlike OpenAI which caps it. A chatbot with Max Tokens set
+  // for a 128k model then breaks the moment it is switched to Haiku, so cap it here.
+  private function max_tokens_for( $query ) {
+    $maxTokens = !empty( $query->maxTokens ) ? (int) $query->maxTokens : 4096;
+    $info = $this->retrieve_model_info( $query->model );
+    if ( !empty( $info['maxCompletionTokens'] ) ) {
+      $maxTokens = min( $maxTokens, (int) $info['maxCompletionTokens'] );
+    }
+    return $maxTokens;
+  }
+
   protected function build_body( $query, $streamCallback = null, $extra = null ) {
     if ( $query instanceof Meow_MWAI_Query_Feedback ) {
       $body = [
         'model' => $query->model,
-        // Anthropic requires a valid integer; fall back like the main path does,
-        // otherwise a function-calling loop without an explicit maxTokens 400s here.
-        'max_tokens' => !empty( $query->maxTokens ) ? $query->maxTokens : 4096,
+        'max_tokens' => $this->max_tokens_for( $query ),
         'stream' => !is_null( $streamCallback ),
         'messages' => []
       ];
@@ -649,13 +659,7 @@ class Meow_MWAI_Engines_Anthropic extends Meow_MWAI_Engines_ChatML {
         'stream' => !is_null( $streamCallback ),
       ];
 
-      if ( !empty( $query->maxTokens ) ) {
-        $body['max_tokens'] = $query->maxTokens;
-      }
-      else {
-        // https://docs.anthropic.com/en/docs/about-claude/models#model-comparison-table
-        $body['max_tokens'] = 4096;
-      }
+      $body['max_tokens'] = $this->max_tokens_for( $query );
 
       // Null means "not set"; 0 is a valid temperature and must still be sent.
       if ( isset( $query->temperature ) && $this->model_supports_temperature( $query->model ) ) {

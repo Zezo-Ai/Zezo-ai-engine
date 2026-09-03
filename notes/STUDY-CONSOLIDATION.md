@@ -22,7 +22,7 @@ them. Fixed in commit `f93d978e`. This is the proof, not a hypothetical.
 
 ## Backlog (ranked — pull the highest-value item that fits the time)
 
-- [~] **1. Pre-release smoke gate for the chatbot/engine path.** Highest leverage. The `labs/tests`
+- [x] **1. Pre-release smoke gate for the chatbot/engine path.** Highest leverage. The `labs/tests`
   harness we used would have caught every 3.5.6 regression. Make a runnable battery (text, history,
   context/RAG, image, function-call non-stream + stream, file/PDF) across each provider env, run before
   any release. This is the structural fix for the failure mode above.
@@ -50,8 +50,15 @@ them. Fixed in commit `f93d978e`. This is the proof, not a hypothetical.
   **Slice three, RAG-through-chat DONE 2026-07-24**: RAGCHAT drives /simpleChatbotQuery on the
   smoke-rag fixture bot (wired to the new Internal (WordPress DB) vector env, intern01 on
   ai.nekod.net) and expects a fact that only exists in the knowledge base. Validated against a
-  simulated dropped-context regression. **Slice three remaining TODO**: image-in-chat and
-  PDF-in-chat; printed as SKIP so the coverage gap stays visible.
+  simulated dropped-context regression.
+  **Slice three, files-in-chat DONE 2026-09-03**: IMAGE (test-data/gotokuji.jpg, reply must say
+  "cat") and PDF (test-data/invoice-slices.pdf, reply must contain the invoice number) run on the
+  same smoke-* fixture bot as FUNC, through /simpleFileUpload + /simpleChatbotQuery with fileIds.
+  SKIP when the settings model list says the bot's model lacks the vision/files tag. Item closed:
+  every regression class from 3.5.6 now has a check. `node labs/tests/test-smoke.js` before any
+  `pnpm zip`. Fixture bots live on ai.nekod.net and can vanish with a settings reset; recreate
+  smoke-openai / smoke-anthropic (function 17, maxTokens 4096) and smoke-rag (intern01) if the
+  gate prints SKIP for FUNC/RAGCHAT.
 - [ ] **2. Gemini external MCP consumption.** OpenAI (`openai.php:~403`) and Anthropic (`anthropic.php`)
   consume `$query->mcpServers`; the new default Google engine (`google-interactions.php`) does NOT — it
   only wires Google's built-in tools. MCP is the core moat, so the default Google engine being unable to
@@ -94,3 +101,18 @@ them. Fixed in commit `f93d978e`. This is the proof, not a hypothetical.
   through the real chatbot pipeline via smoke-* fixture bots. Proven against the same-day Sonnet 5
   streaming bug (84ecb22b): gate fails with the fix reverted, passes with it. Full run: 27 passed,
   0 failed, 9 skipped (envs without fixture bots). Retry-once added for flaky providers.
+- 2026-07-23: Item 1 slice three (MCP round-trip) shipped. `node labs/tests/test-smoke.js mcp` drives
+  the real Streamable HTTP transport: MCPINIT, METAREAD, METAUPD, CONTENT, MCPCLEAN. Validated against
+  the real bug (maybe_serialize reintroduced fails METAUPD with DOUBLE-SERIALIZED). Covers the
+  2.8.5 to 3.5.9 meta/content corruption classes from Dave Hilditch's PSA.
+- 2026-07-24: Item 1 slice three (RAG through chat) shipped. RAGCHAT on the smoke-rag fixture bot,
+  wired to the Internal (WordPress DB) env intern01. Validated against a simulated dropped-context
+  regression.
+- 2026-09-03: Item 1 CLOSED. IMAGE + PDF checks shipped (the last two SKIP lines are gone). The
+  fixture bots had been wiped from ai.nekod.net since July (every FUNC/RAGCHAT was silently SKIP);
+  recreated, and the note above says how to do it again. Full run: OpenAI 8/8, Anthropic 8/8,
+  RAG 1/1, MCP 5/5. First catch of the new slice: a fixture bot with maxTokens 128000 on Haiku
+  4.5 400s at Anthropic ("max_tokens: 128000 > 64000"), the same thing a user hits when switching
+  a chatbot to a smaller Claude model. Fixed by capping max_tokens to the model's
+  maxCompletionTokens in `anthropic.php` (max_tokens_for). Next: item 3 (schema-driven chatbot
+  params) or item 2 (Gemini external MCP), Jordy's pick.

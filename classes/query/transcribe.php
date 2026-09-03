@@ -9,7 +9,7 @@ class Meow_MWAI_Query_Transcribe extends Meow_MWAI_Query_Base {
   // Core Content
   public ?Meow_MWAI_Query_DroppedFile $attachedFile = null;
 
-  public function __construct( $message = '', $model = 'whisper-1' ) {
+  public function __construct( $message = '', $model = MWAI_FALLBACK_MODEL_AUDIO ) {
     parent::__construct( $message );
     $this->set_model( $model );
     $this->feature = 'transcription';
