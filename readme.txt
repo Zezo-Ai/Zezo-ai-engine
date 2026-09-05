@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 3.7.5
+Stable tag: 3.7.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -304,6 +304,11 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.7.6 (2026/09/05) =
+* Add: Support for GPT-6 Astra, including its max reasoning level.
+* Fix: Temperature is no longer sent to models that reject it.
+* Update: The reasoning dropdown now only shows levels supported by the selected model.
 
 = 3.7.5 (2026/09/03) =
 * Add: Claude Fable 5.1 to the Anthropic models.

@@ -6,6 +6,38 @@
 
 define( 'MWAI_OPENAI_MODELS', [
   /*
+    GPT-6 Astra
+    OpenAI's flagship, released 2026-09-03. Tool calling only works through the
+    Responses API, which the 'responses' tag already forces for this model.
+    https://developers.openai.com/api/docs/models/gpt-6-astra
+    */
+  [
+    'model' => 'gpt-6-astra',
+    'name' => 'GPT-6 Astra',
+    'family' => 'gpt-6',
+    'features' => ['completion'],
+    'price' => [
+      'in' => 10.00,
+      'out' => 50.00,
+      'cached' => 1.00,
+    ],
+    'type' => 'token',
+    'unit' => 1 / 1000000,
+    'maxCompletionTokens' => 128000,
+    'maxContextualTokens' => 1050000,
+    'finetune' => false,
+    // No 'verbosity': unlike the GPT-5.6 line, the model page does not document it.
+    // 'no-temperature': the API answers 400 "Unsupported parameter: 'temperature'" for this
+    // model. The GPT-5 line is caught by a name check in the engines, which a gpt-6 id does
+    // not match, so the tag is what stops us sending it (verified live 2026-09-05).
+    'tags' => ['core', 'chat', 'vision', 'files', 'functions', 'json', 'responses', 'mcp', 'reasoning', 'no-temperature', 'latest'],
+    'tools' => ['web_search', 'code_interpreter'],
+    'params' => [
+      // 'max' is new with this model; the effort dropdown reads this list.
+      'reasoning' => ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+    ]
+  ],
+  /*
     GPT-5.6 Sol
     Frontier tier of the GPT-5.6 family; the bare gpt-5.6 alias points here.
     https://developers.openai.com/api/docs/models/gpt-5.6-sol

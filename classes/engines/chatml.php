@@ -292,15 +292,20 @@ class Meow_MWAI_Engines_ChatML extends Meow_MWAI_Engines_Core {
 
       // Null means "not set"; 0 is a valid temperature and must still be sent.
       if ( isset( $query->temperature ) ) {
-        // GPT-5 and o1 models don't support temperature parameter
-        if ( !$this->is_o1_model( $query->model ) && !$this->is_gpt5_model( $query->model ) ) {
+        // Models that reject temperature say so with the 'no-temperature' tag. The o1 and
+        // GPT-5 name checks predate the tag and stay for the entries that do not carry it;
+        // a name check alone misses every future family (GPT-6 rejects it too).
+        $modelInfo = $this->retrieve_model_info( $query->model );
+        $noTemperature = !empty( $modelInfo['tags'] ) &&
+          in_array( 'no-temperature', $modelInfo['tags'], true );
+        if ( !$noTemperature && !$this->is_o1_model( $query->model ) && !$this->is_gpt5_model( $query->model ) ) {
           $body['temperature'] = $query->temperature;
         }
-        else if ( $this->is_o1_model( $query->model ) ) {
+        else if ( !$noTemperature && $this->is_o1_model( $query->model ) ) {
           // o1 models require temperature to be 1 if specified
           $body['temperature'] = 1;
         }
-        // For GPT-5 models, we simply don't include the temperature parameter
+        // For GPT-5, GPT-6 and other no-temperature models, we simply don't include it.
       }
 
       if ( !empty( $query->maxResults ) ) {
