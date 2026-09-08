@@ -558,6 +558,28 @@ class Meow_MWAI_Engines_OpenRouter extends Meow_MWAI_Engines_ChatML {
    */
   public function connection_check() {
     try {
+      // The models endpoint is PUBLIC: it answers 200 with no key at all, so listing
+      // models proved nothing and the test reported success on an empty or wrong key.
+      // /api/v1/key is the authenticated one (401 without a valid key), so the
+      // credentials are checked there first.
+      if ( empty( $this->apiKey ) ) {
+        throw new Exception( 'No API key set for this environment.' );
+      }
+      $auth = wp_remote_get( 'https://openrouter.ai/api/v1/key', [
+        'headers' => [ 'Authorization' => 'Bearer ' . $this->apiKey ],
+        'timeout' => 15,
+      ] );
+      if ( is_wp_error( $auth ) ) {
+        throw new Exception( $auth->get_error_message() );
+      }
+      $authCode = wp_remote_retrieve_response_code( $auth );
+      if ( $authCode === 401 || $authCode === 403 ) {
+        throw new Exception( 'The API key was refused by OpenRouter (HTTP ' . $authCode . ').' );
+      }
+      if ( $authCode < 200 || $authCode >= 300 ) {
+        throw new Exception( 'OpenRouter answered HTTP ' . $authCode . ' when checking the API key.' );
+      }
+
       // Use the existing retrieve_models method
       $models = $this->retrieve_models();
 
@@ -593,7 +615,7 @@ class Meow_MWAI_Engines_OpenRouter extends Meow_MWAI_Engines_ChatML {
         'service' => 'OpenRouter',
         'error' => $e->getMessage(),
         'details' => [
-          'endpoint' => 'https://openrouter.ai/api/v1/models'
+          'endpoint' => 'https://openrouter.ai/api/v1/key'
         ]
       ];
     }

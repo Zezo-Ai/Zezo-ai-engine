@@ -5,7 +5,7 @@ Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 3.7.6
+Stable tag: 3.7.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,7 @@ Hello! ☀️ I built AI Engine to bring OpenAI, Anthropic, and other AI models 
 
 For developers: [internal APIs](https://ai.thehiddendocs.com/php-functions/), [REST endpoints](https://ai.thehiddendocs.com/public-rest-api/), [function calling](https://ai.thehiddendocs.com/function-calling/), and [MCP support](https://ai.thehiddendocs.com/mcp/). Build AI features, automate workflows, or create SaaS applications on WordPress.
 
-There is also a Workspace: a full-screen AI chat inside wp-admin, with every model you configured, and a free [iOS app](https://apps.apple.com/app/workspace-for-wordpress/id6794717714) so you can keep working on your site from your phone. Details on [workspace.press](https://workspace.press/).
+There is also a Workspace: a full-screen AI chat inside wp-admin, with every model you configured, and free apps for [iPhone](https://apps.apple.com/app/workspace-for-wordpress/id6794717714) and [Android](https://play.google.com/store/apps/details?id=com.meowapps.workspace) so you can keep working on your site from your phone. Details on [workspace.press](https://workspace.press/).
 
 Feeling overwhelmed? 🤪 Start simple: Create a chatbot. Then connect [Claude Code](https://ai.thehiddendocs.com/mcp/mcp-server-claude-code/), [Claude](https://ai.thehiddendocs.com/mcp/mcp-server-claude/), [ChatGPT](https://ai.thehiddendocs.com/mcp/mcp-server-chatgpt/), or [OpenClaw](https://meowapps.com/openclaw-wordpress-mcp/) through MCP, giving AI direct access to your site. Desktop clients can connect via OAuth: users just paste the MCP URL, sign in to WordPress, and approve. No shared token to manage. Add [SEO Engine](https://wordpress.org/plugins/seo-engine/) and watch it manage SEO in ways you never imagined. You can even connect AI Engine to multiple WordPress sites and manage them all through conversation.
 
@@ -34,8 +34,8 @@ You'll be having a blast before you've explored everything. You'll probably spot
 🤖 **Chatbots**
 Create intelligent chatbots with customizable themes, realtime audio, and multi-file support. Features modular UI Builder, conversation memory, and MacOS-style components.
 
-🖥️ **Workspace** (with a free [iOS app](https://apps.apple.com/app/workspace-for-wordpress/id6794717714))
-A full-screen AI chat inside your WordPress admin: every model you configured, conversation history and folders, a prompt library, image generation, web search, and hands-on access to your site through the MCP tools. It also runs on your iPhone and iPad, through [Workspace for WordPress](https://workspace.press/).
+🖥️ **Workspace** (with free [iPhone](https://apps.apple.com/app/workspace-for-wordpress/id6794717714) and [Android](https://play.google.com/store/apps/details?id=com.meowapps.workspace) apps)
+A full-screen AI chat inside your WordPress admin: every model you configured, conversation history and folders, a prompt library, image generation, web search, and hands-on access to your site through the MCP tools. It also runs on your phone and tablet, through [Workspace for WordPress](https://workspace.press/).
 
 🎨 **Content & Media**
 Generate content, translate text, create images and videos from prompts, and use Copilot in the WordPress editor to correct, enhance, translate, or rewrite text.
@@ -58,13 +58,13 @@ AI-powered recommendations and insights to help you set up and optimize your Wor
 🔌 **Developer Tools**
 Internal APIs, REST endpoints, MCP support, and extensive hooks. Build AI-driven features, automate workflows, or create SaaS applications.
 
-== 🖥️ Workspace (and its iOS app) ==
+== 🖥️ Workspace (and its mobile apps) ==
 
 A full-screen AI chat that lives in your WordPress admin, and now in your pocket too.
 
 Every model you configured is one tap away, in the same conversation: start a thread on Claude, continue it on ChatGPT or Gemini, generate an image, search the web, then let it work on the site itself through the MCP tools, with an approval dialog before anything is changed.
 
-[**Workspace for WordPress**](https://apps.apple.com/app/workspace-for-wordpress/id6794717714) brings all of it to your iPhone and iPad. You scan a QR code once to pair it with your site, no password typed on a phone keyboard, and the pairing is a revocable Application Password you can cut off at any time. Your conversations, folders and themes stay on your own site, and your API keys never leave it.
+**Workspace for WordPress** brings all of it to your phone and tablet, on the [App Store](https://apps.apple.com/app/workspace-for-wordpress/id6794717714) and [Google Play](https://play.google.com/store/apps/details?id=com.meowapps.workspace). You scan a QR code once to pair it with your site, no password typed on a phone keyboard, and the pairing is a revocable Application Password you can cut off at any time. Your conversations, folders and themes stay on your own site, and your API keys never leave it.
 
 The app is free, the plugin is free, and there is no markup on anything: you pay your AI providers directly, at their price. More about it on [workspace.press](https://workspace.press/).
 
@@ -76,7 +76,7 @@ The app is free, the plugin is free, and there is no markup on anything: you pay
 * Site actions through MCP, with approval before any change
 * Attach files and save generated images to the Media Library
 * Themes that sync across your devices through your WordPress account
-* Requires iOS 17 or newer, on iPhone and iPad
+* Requires iOS 17 or newer, or Android 8 or newer
 
 == 🤖 Chatbots ==
 
@@ -267,7 +267,7 @@ Please be aware that there may be conflicts with certain caching or performance 
 4. Building a chatbot in the settings: pick the environment, the model, the context and the functions, and try it right there in the live preview.
 5. The Content Generator: a whole post from a topic, sections first, then the content and the excerpt, all editable before it is published.
 6. The Workspace: a full-screen AI chat inside wp-admin that can read and manage your site, with every model you configured.
-7. Workspace for iOS: your site's AI on your iPhone. Every model, your keys, your site, with conversations kept on your own WordPress and image generation included.
+7. Workspace on your phone: your site's AI on iPhone or Android. Every model, your keys, your site, with conversations kept on your own WordPress and image generation included.
 
 == Frequently Asked Questions ==
 
@@ -304,6 +304,15 @@ Start with the [Basics guide](https://ai.thehiddendocs.com/basics/) for installa
 Report security vulnerabilities through the [Patchstack Vulnerability Disclosure Program](https://patchstack.com/database/vdp/9e5fbbbc-964a-4204-8bc0-198f21284efd).
 
 == Changelog ==
+
+= 3.7.7 (2026/09/08) =
+* Add: Local Memory now stores the shortcuts and blocks of the last reply, so they persist after a reload.
+* Fix: Pairing failures that consumed the token now ask the user to generate a new code.
+* Fix: Connection test no longer always reports success.
+* Fix: Gemini no longer offers Live-only models as chatbots.
+* Fix: Function calling on Google's Standard API.
+* Fix: AI Copilot no longer stretches paragraphs to the full editor width.
+* Update: Workspace is now described as available on both iOS and Android in the readme and admin.
 
 = 3.7.6 (2026/09/05) =
 * Add: Support for GPT-6 Astra, including its max reasoning level.

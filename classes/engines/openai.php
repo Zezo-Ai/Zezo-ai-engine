@@ -2372,8 +2372,13 @@ class Meow_MWAI_Engines_OpenAI extends Meow_MWAI_Engines_ChatML {
    */
   public function connection_check() {
     try {
+      // execute() takes a PATH and prepends the base endpoint itself, like every other
+      // caller here does. Passing the absolute URL built the request against
+      // "https://api.openai.com/v1https://api.openai.com/v1/models", a 404 whose empty
+      // body decoded to null, so this check reported "Invalid response format" on a
+      // perfectly good API key. The hardcoded success in the REST layer hid it.
       $url = $this->get_models_endpoint();
-      $response = $this->execute( 'GET', $url );
+      $response = $this->execute( 'GET', '/models' );
 
       if ( !isset( $response['data'] ) || !is_array( $response['data'] ) ) {
         throw new Exception( 'Invalid response format from OpenAI' );

@@ -708,13 +708,23 @@ class Meow_MWAI_Rest {
       $engine = Meow_MWAI_Engines_Factory::get( $this->core, $envId );
       $result = $engine->connection_check();
 
-      // Format the response based on provider
+      // The engine reports its own verdict in $result['success']. This used to be
+      // hardcoded to true, so anything short of a thrown exception was announced as
+      // "Connection successful", including a refused or missing API key.
+      $ok = !isset( $result['success'] ) || !empty( $result['success'] );
       $response = [
-        'success' => true,
+        'success' => $ok,
         'provider' => $env['type'],
         'name' => $env['name'],
         'data' => $result
       ];
+      if ( !$ok ) {
+        $reason = $result['error'] ?? __( 'The connection test failed.', 'ai-engine' );
+        $response['error'] = $reason;
+        // nekoFetch throws on success:false and reads 'message' for the text it shows,
+        // so without this the modal only ever says "Unknown error".
+        $response['message'] = $reason;
+      }
 
       return $this->create_rest_response( $response, 200 );
     }
@@ -723,6 +733,8 @@ class Meow_MWAI_Rest {
       return $this->create_rest_response( [
         'success' => false,
         'error' => $message,
+        // Same reason as above: the modal reads 'message', or it shows "Unknown error".
+        'message' => $message,
         'provider' => isset( $env ) ? $env['type'] : 'unknown'
       ], 200 ); // Return 200 even on error for consistent modal display
     }

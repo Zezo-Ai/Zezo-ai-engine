@@ -1,5 +1,5 @@
-// Previous: 3.6.2
-// Current: 3.7.3
+// Previous: 3.7.3
+// Current: 3.7.7
 
 ```jsx
 /* eslint-disable react/display-name */
@@ -29,9 +29,11 @@ const BlockCopilot = () => {
     const [ composing, setComposing ] = useState(false);
     const [ isImageMode, setIsImageMode ] = useState(false);
     const postId = wp.data.select('core/editor').getCurrentPostId();
+    const composingRef = useRef(false);
+    composingRef.current = composing;
 
     const handleKeyPress = (e) => {
-      if (composing) return;
+      if (composingRef.current) return;
       const actualContent = (e?.target?.innerText || '').trim();
       const localName = e?.target?.localName;
       if (e.code === 'Space' && !actualContent && localName === 'p') {
@@ -39,6 +41,27 @@ const BlockCopilot = () => {
         setDisplay(true);
       }
     };
+
+    useEffect(() => {
+      if (display) {
+        return;
+      }
+      const doc = getCanvasDocument();
+      const el = doc?.querySelector(`[data-block="${props.clientId}"]`);
+      if (!el) {
+        return;
+      }
+      const onStart = () => setComposing(true);
+      const onEnd = () => setComposing(false);
+      el.addEventListener('keydown', handleKeyPress);
+      el.addEventListener('compositionstart', onStart);
+      el.addEventListener('compositionend', onEnd);
+      return () => {
+        el.removeEventListener('keydown', handleKeyPress);
+        el.removeEventListener('compositionstart', onStart);
+        el.removeEventListener('compositionend', onEnd);
+      };
+    }, [props.clientId, display]);
 
     const executeQuery = async (query) => {
       const context = getPostContent("[== CURRENT BLOCK ==]");
@@ -174,16 +197,7 @@ const BlockCopilot = () => {
         </Card>
       );
     }
-    return (
-      <div
-        style={{ display: 'contents' }}
-        onCompositionStart={() => setComposing(true)}
-        onCompositionEnd={() => setComposing(false)}
-        onKeyDown={handleKeyPress}
-      >
-        <props.BlockEdit {...props} />
-      </div>
-    );
+    return <props.BlockEdit {...props} />;
   };
 
   const blockEditCopilot = (BlockEdit) => {

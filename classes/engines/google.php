@@ -424,6 +424,26 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
       }
     }
 
+    // Mixing our own function declarations with one of Google's server-side tools
+    // (google_search and friends) is refused with a 400 unless this flag is set:
+    // "Please enable tool_config.include_server_side_tool_invocations to use Built-in
+    // tools with Function calling." Only the Standard API path needs it.
+    if ( !empty( $body['tools'] ) ) {
+      $hasFunctions = false;
+      $hasBuiltin = false;
+      foreach ( $body['tools'] as $tool ) {
+        if ( isset( $tool['function_declarations'] ) ) {
+          $hasFunctions = true;
+        }
+        else {
+          $hasBuiltin = true;
+        }
+      }
+      if ( $hasFunctions && $hasBuiltin ) {
+        $body['tool_config']['include_server_side_tool_invocations'] = true;
+      }
+    }
+
     // Build messages
     $body['contents'] = $this->build_messages( $query );
 
@@ -1149,10 +1169,21 @@ class Meow_MWAI_Engines_Google extends Meow_MWAI_Engines_Core {
         $features = [ 'video-generation' ];
       }
       else {
+        // Google tells us what each model can actually do. Anything without
+        // generateContent cannot answer a chat request: gemini-3.5-transcribe-live, for
+        // example, only has bidiGenerateContent (the Live API), so offering it in the
+        // chatbot model picker just produces a failed query. When the field is missing
+        // we keep the old assumption and treat the model as chat-capable.
+        $methods = isset( $model['supportedGenerationMethods'] )
+          ? (array) $model['supportedGenerationMethods'] : [];
+        $supportsChat = empty( $methods ) || in_array( 'generateContent', $methods, true );
+
         // Gemini models - all support function calling according to documentation
-        $tags[] = 'chat';
-        $tags[] = 'functions';
-        $tools[] = 'function_calling';
+        if ( $supportsChat ) {
+          $tags[] = 'chat';
+          $tags[] = 'functions';
+          $tools[] = 'function_calling';
+        }
 
         // Check if it's a preview/beta model
         if ( preg_match( '/\((beta|alpha|preview)\)/i', $model['name'] ) ||

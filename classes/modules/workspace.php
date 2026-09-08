@@ -871,10 +871,11 @@ class Meow_MWAI_Modules_Workspace {
 
     $user = get_user_by( 'id', (int) $data['user_id'] );
     if ( !$user || !user_can( $user, 'manage_options' ) ) {
-      return new WP_REST_Response( [ 'success' => false, 'message' => 'That account can no longer connect a mobile app.' ], 403 );
+      // The token was consumed above, so a rescan of the same code cannot work: say so.
+      return new WP_REST_Response( [ 'success' => false, 'message' => 'That account can no longer connect a mobile app. Generate a new pairing code once it can.' ], 403 );
     }
     if ( !$this->pairing_available( $user ) ) {
-      return new WP_REST_Response( [ 'success' => false, 'message' => $this->pairing_unavailable_reason() ], 400 );
+      return new WP_REST_Response( [ 'success' => false, 'message' => $this->pairing_unavailable_reason() . ' Once that is fixed, generate a new pairing code.' ], 400 );
     }
 
     $created = WP_Application_Passwords::create_new_application_password(
